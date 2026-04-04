@@ -1,0 +1,13 @@
+parameters:
+  level: 5
+  paths:
+    - app
+    - tests
+  excludePaths:
+    - storage
+    - bootstrap
+    - vendor
+  ignoreErrors:
+    # HTTP Client Response object methods are not recognized by PHPStan but are real
+    - pattern: '#Call to an undefined method Illuminate\\Http\\Client\\Response::(successful|status|body|json)\(\)#'
+

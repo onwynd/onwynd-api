@@ -1,0 +1,19 @@
+// Payment routes - Add to routes/api.php in the V1 group
+
+Route::middleware('auth:sanctum')->group(function () {
+    // Payment initiation and verification
+    Route::post('/payments/initiate', [PaymentController::class, 'initiatePayment'])->name('payment.initiate');
+    Route::post('/payments/{payment}/verify', [PaymentController::class, 'verifyPayment'])->name('payment.verify');
+    Route::get('/payments', [PaymentController::class, 'getPaymentHistory'])->name('payment.history');
+    Route::get('/payments/{payment}', [PaymentController::class, 'getPayment'])->name('payment.show');
+    Route::get('/payments/summary', [PaymentController::class, 'getPaymentSummary'])->name('payment.summary');
+    Route::post('/payments/{payment}/refund', [PaymentController::class, 'refundPayment'])->name('payment.refund');
+});
+
+// Webhook endpoints - No authentication required
+Route::post('/payments/webhook/paystack', [PaymentController::class, 'handleWebhook'])->name('payment.webhook.paystack');
+Route::post('/payments/webhook/flutterwave', [PaymentController::class, 'handleWebhook'])->name('payment.webhook.flutterwave');
+Route::post('/payments/webhook/stripe', [PaymentController::class, 'handleWebhook'])->name('payment.webhook.stripe');
+
+// Callback endpoint - No authentication required
+Route::get('/payments/callback', [PaymentController::class, 'verifyCallback'])->name('payment.callback');

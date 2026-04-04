@@ -1,0 +1,31 @@
+<IfModule mod_headers.c>
+    # Allow audio/media files to be fetched cross-origin by the frontend
+    <FilesMatch "\.(mp3|m4a|wav|ogg|aac|flac)$">
+        Header set Access-Control-Allow-Origin "https://onwynd.com"
+        Header set Access-Control-Allow-Methods "GET, OPTIONS"
+        Header set Access-Control-Allow-Headers "Authorization, Range"
+        Header set Access-Control-Expose-Headers "Content-Length, Content-Range"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options +FollowSymlinks
+        Options -SymLinksIfOwnerMatch
+    </IfModule>
+
+    RewriteEngine On
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Redirect Trailing Slashes If Not A Folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Handle Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>

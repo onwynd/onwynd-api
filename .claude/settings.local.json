@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs perl:*)",
+      "Bash(powershell -Command \"Get-ChildItem -Recurse -Path ''app/Http/Controllers'' -Filter ''*.php'' | Where-Object { \\(Get-Content $_FullName -Raw\\) -match ''Controllers\\\\\\\\Api\\\\\\\\BaseController'' } | ForEach-Object { $content = Get-Content $_.FullName -Raw; $content = $content -replace ''Controllers\\\\\\\\Api\\\\\\\\BaseController'', ''Controllers\\\\\\\\API\\\\\\\\BaseController''; Set-Content -Path $_.FullName -Value $content -NoNewline }\")"
+    ]
+  }
+}
