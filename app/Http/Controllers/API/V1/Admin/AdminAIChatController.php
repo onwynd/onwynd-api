@@ -99,8 +99,12 @@ class AdminAIChatController extends Controller
     /**
      * Get all messages in a specific conversation
      */
-    public function getConversation(Request $request, string $conversationId): JsonResponse
+    public function getConversation(Request $request, string $conversationId = ''): JsonResponse
     {
+        // Route parameter may be bound as {conversation_id} or {conversationId}
+        $conversationId = $conversationId
+            ?: ($request->route('conversation_id') ?? '');
+
         validator(
             ['conversation_id' => $conversationId],
             ['conversation_id' => 'required|string|uuid']

@@ -662,24 +662,11 @@ class TherapistProfileController extends Controller
     {
         try {
             $user = Auth::user();
-            $therapist = $user->therapist;
-
-            if (! $therapist) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User is not a therapist',
-                ], 404);
-            }
-
-            $period = $request->get('period', 'month'); // month, year, all
+            $period = $request->get('period', 'month');
             $startDate = $this->getStartDate($period);
 
-            Log::info('Therapist: Get financial flow', [
-                'therapist_id' => $therapist->id,
-                'period' => $period,
-            ]);
-
-            $sessions = $therapist->sessions()
+            // Query sessions directly by therapist user_id — avoids null Therapist relation
+            $sessions = \App\Models\TherapySession::where('therapist_id', $user->id)
                 ->where('status', 'completed')
                 ->where('created_at', '>=', $startDate)
                 ->get();
@@ -687,12 +674,14 @@ class TherapistProfileController extends Controller
             $totalEarnings = $sessions->sum('session_fee');
             $completedSessions = $sessions->count();
 
-            // Get payouts in period
-            $payouts = $therapist->payouts()
-                ->where('created_at', '>=', $startDate)
-                ->get();
-
-            $totalPayouts = $payouts->sum('amount');
+            // Query payouts via the therapist profile id (if profile exists)
+            $profileId = $user->therapistProfile?->id;
+            $totalPayouts = $profileId
+                ? \App\Models\TherapistPayout::where('therapist_id', $profileId)
+                    ->where('status', 'completed')
+                    ->where('created_at', '>=', $startDate)
+                    ->sum('amount')
+                : 0;
 
             return response()->json([
                 'success' => true,

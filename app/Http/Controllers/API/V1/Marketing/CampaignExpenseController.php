@@ -16,7 +16,7 @@ class CampaignExpenseController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user  = $request->user();
-        $roles = $user->roles()->pluck('name')->toArray();
+        $roles = $user->roles()->pluck('role')->toArray();
 
         $query = CampaignExpense::with(['submittedBy:id,first_name,last_name', 'reviewedBy:id,first_name,last_name', 'campaign:id,name'])
                                 ->latest();
@@ -161,7 +161,7 @@ class CampaignExpenseController extends Controller
     public function review(Request $request, int $id): JsonResponse
     {
         $user  = $request->user();
-        $roles = $user->roles()->pluck('name')->toArray();
+        $roles = $user->roles()->pluck('role')->toArray();
         abort_if(
             empty(array_intersect($roles, ['finance', 'cfo', 'vp_marketing', 'admin', 'super_admin'])),
             403,
@@ -189,7 +189,7 @@ class CampaignExpenseController extends Controller
 
     private function authorizeExpense($user, CampaignExpense $expense): void
     {
-        $roles = $user->roles()->pluck('name')->toArray();
+        $roles = $user->roles()->pluck('role')->toArray();
         $canSeeAll = !empty(array_intersect($roles, ['finance', 'cfo', 'admin', 'super_admin', 'founder', 'vp_marketing', 'coo', 'ceo', 'president']));
         abort_if(!$canSeeAll && $expense->submitted_by !== $user->id, 403);
     }

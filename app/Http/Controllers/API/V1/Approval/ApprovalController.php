@@ -36,7 +36,7 @@ class ApprovalController extends Controller
         if (!$user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
-        $roleNames = $user->roles()->pluck('name')->toArray();
+        $roleNames = $user->roles()->pluck('role')->toArray();
         $isAdmin   = !empty(array_intersect($roleNames, ['admin', 'super_admin', 'hr']));
 
         $query = ApprovalRequest::with([
@@ -172,7 +172,7 @@ class ApprovalController extends Controller
 
     private function authorizeView($user, ApprovalRequest $approval): void
     {
-        $roleNames = $user->roles()->pluck('name')->toArray();
+        $roleNames = $user->roles()->pluck('role')->toArray();
         $isAdmin   = !empty(array_intersect($roleNames, ['admin', 'super_admin', 'hr']));
         $isRequester = $approval->requested_by === $user->id;
         $isApprover  = $approval->steps->contains(fn ($s) =>

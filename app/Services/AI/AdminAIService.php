@@ -453,8 +453,8 @@ CONTEXT;
                 ->where('created_at', '>=', now()->startOfMonth())
                 ->count();
 
-            $pendingVerifications = DB::table('user_profiles')
-                ->where('document_verification_status', 'pending')
+            $pendingVerifications = DB::table('therapist_profiles')
+                ->where('status', 'pending')
                 ->count();
 
             $openTickets = DB::table('support_tickets')->where('status', 'open')->count();

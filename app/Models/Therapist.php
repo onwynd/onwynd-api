@@ -123,6 +123,11 @@ class Therapist extends Model
         return $this->hasMany(TherapistRating::class, 'therapist_id', 'user_id');
     }
 
+    public function sessions(): HasMany
+    {
+        return $this->hasMany(TherapySession::class, 'therapist_id', 'user_id');
+    }
+
     public function favoritedBy(): BelongsToMany
     {
         return $this->belongsToMany(Patient::class, 'patient_favorites', 'therapist_id', 'patient_id')->withTimestamps();

@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->boolean('two_factor_enabled')->default(false)->after('remember_token');
+            $table->boolean('two_factor_enabled')->default(false)->after('is_active');
             $table->text('two_factor_secret')->nullable()->after('two_factor_enabled');
             $table->timestamp('last_login_at')->nullable()->after('last_seen_at');
             $table->boolean('marked_for_deletion')->default(false)->after('deleted_at');

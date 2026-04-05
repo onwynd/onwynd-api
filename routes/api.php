@@ -668,7 +668,7 @@ Route::prefix('v1')->group(function () {
         Route::post('promo-codes/validate', [PatientPromotionalCodeController::class, 'validateCode']);
 
         // Patient routes
-        Route::prefix('patient')->middleware(['role:patient'])->group(function () {
+        Route::prefix('patient')->middleware(['role:patient|user|customer|investor'])->group(function () {
             Route::get('dashboard', [PatientDashboardController::class, 'index']);
             // Session sub-routes BEFORE apiResource so named routes don't conflict
             Route::get('sessions/upcoming', [PatientSessionController::class, 'upcoming']);
@@ -1117,11 +1117,6 @@ Route::prefix('v1')->group(function () {
 
         // Admin routes
         Route::prefix('admin')->middleware(['role:admin|ceo|super_admin|founder'])->group(function () {
-            // Admin AI Assistant ? completely separate from patient AI companion
-            Route::post('ai/chat', [\App\Http\Controllers\API\V1\Admin\AdminAIChatController::class, 'chat']);
-        Route::get('ai/conversations', [\App\Http\Controllers\API\V1\Admin\AdminAIChatController::class, 'getConversations']);
-        Route::get('ai/conversations/{conversationId}', [\App\Http\Controllers\API\V1\Admin\AdminAIChatController::class, 'getConversation']);
-
             Route::get('dashboard', [AdminDashboardController::class, 'index']);
             Route::get('dashboard/revenue-flow', [AdminDashboardController::class, 'revenueFlow']);
             Route::get('dashboard/lead-sources', [AdminDashboardController::class, 'leadSources']);
@@ -1425,7 +1420,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // COO & CGO specific routes
-        Route::prefix('coo')->middleware(['auth:sanctum', 'role:coo|cgo|ceo|admin'])->group(function () {
+        Route::prefix('coo')->middleware(['auth:sanctum', 'role:coo|vp_operations|cgo|ceo|admin'])->group(function () {
             Route::get('operations-overview', [COOController::class, 'operationsOverview']);
             Route::get('ai-operations', [COOController::class, 'aiOperations']);
 
@@ -1619,7 +1614,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Sales routes
-        Route::prefix('sales')->middleware(['role:sales'])->group(function () {
+        Route::prefix('sales')->middleware(['role:sales|vp_sales'])->group(function () {
             Route::get('dashboard', [SalesDashboardController::class, 'index']);
             Route::get('stats', [SalesDashboardController::class, 'stats']);
             Route::get('notifications', [SalesNotificationController::class, 'index']);
@@ -1662,7 +1657,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Marketing routes
-        Route::prefix('marketing')->middleware(['role:marketing|coo|cgo|ceo|admin|super_admin|founder'])->group(function () {
+        Route::prefix('marketing')->middleware(['role:marketing|vp_marketing|coo|cgo|ceo|admin|super_admin|founder'])->group(function () {
             Route::get('dashboard', [MarketingDashboardController::class, 'index']);
             Route::get('stats', [MarketingDashboardController::class, 'index']);
             Route::post('ai/chat', [\App\Http\Controllers\API\V1\Admin\AdminAIChatController::class, 'chat']);
@@ -1745,7 +1740,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Physical Center routes
-        Route::prefix('center')->middleware(['role:center_manager'])->group(function () {
+        Route::prefix('center')->middleware(['role:center_manager|center'])->group(function () {
             Route::get('dashboard', [\App\Http\Controllers\API\V1\PhysicalCenter\DashboardController::class, 'index']);
             Route::apiResource('centers', CenterController::class, ['as' => 'center']);
             Route::apiResource('bookings', CenterBookingController::class, ['as' => 'center']);
@@ -1799,6 +1794,7 @@ Route::prefix('v1')->group(function () {
 
         // Clinical Advisor Routes
         Route::middleware(['clinical_advisor'])->prefix('clinical-advisor')->group(function () {
+            Route::get('dashboard', [SessionReviewController::class, 'dashboard']);
             Route::get('reviews', [SessionReviewController::class, 'index']);
             Route::get('reviews/{id}', [SessionReviewController::class, 'show']);
             Route::post('reviews/{id}/approve', [SessionReviewController::class, 'approve']);
@@ -1817,7 +1813,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Product Manager routes
-        Route::prefix('product-manager')->middleware(['role:product_manager'])->group(function () {
+        Route::prefix('product-manager')->middleware(['role:product_manager|vp_product|product'])->group(function () {
             Route::get('dashboard', [\App\Http\Controllers\API\V1\ProductManager\DashboardController::class, 'index']);
             Route::get('stats', [\App\Http\Controllers\API\V1\ProductManager\DashboardController::class, 'stats']);
             Route::get('tasks', [\App\Http\Controllers\API\V1\ProductManager\DashboardController::class, 'tasks']);
@@ -1843,7 +1839,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Tech Team routes
-        Route::prefix('tech')->middleware(['role:tech_team'])->group(function () {
+        Route::prefix('tech')->middleware(['role:tech_team|tech'])->group(function () {
             Route::get('dashboard', [\App\Http\Controllers\API\V1\Tech\DashboardController::class, 'index']);
             Route::get('stats', [\App\Http\Controllers\API\V1\Tech\DashboardController::class, 'index']);
             Route::get('health', [\App\Http\Controllers\API\V1\Tech\SystemHealthController::class, 'index']);
