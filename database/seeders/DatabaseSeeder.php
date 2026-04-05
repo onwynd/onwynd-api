@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
             ExecutiveUserSeeder::class,
             UserSeeder::class,
+            ClinicalAdvisorSeeder::class,
             AssessmentSeeder::class,
             SubscriptionPlanSeeder::class,
             EditorialCategorySeeder::class,

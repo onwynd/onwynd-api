@@ -613,7 +613,7 @@ class TherapistProfileController extends Controller
                 ->where('created_at', '>=', $startDate)
                 ->get();
 
-            $totalEarnings = $sessions->sum('session_fee');
+            $totalEarnings = $sessions->sum('session_rate');
             $completedSessions = $sessions->count();
 
             // Get payouts in period
@@ -671,7 +671,7 @@ class TherapistProfileController extends Controller
                 ->where('created_at', '>=', $startDate)
                 ->get();
 
-            $totalEarnings = $sessions->sum('session_fee');
+            $totalEarnings = $sessions->sum('session_rate');
             $completedSessions = $sessions->count();
 
             // Query payouts via the therapist profile id (if profile exists)
@@ -767,8 +767,8 @@ class TherapistProfileController extends Controller
                         'time' => $session->scheduled_time,
                         'duration' => $session->duration_minutes,
                         'status' => $session->status,
-                        'session_fee' => $session->session_fee,
-                        'formatted_fee' => '₦'.number_format($session->session_fee, 2),
+                        'session_rate' => $session->session_rate,
+                        'formatted_fee' => '₦'.number_format($session->session_rate, 2),
                         'notes' => $session->notes,
                     ]),
                 ],
@@ -801,7 +801,7 @@ class TherapistProfileController extends Controller
             'total_reviews' => $therapist->ratings()->count(),
             'total_earnings' => round($therapist->sessions()
                 ->where('status', 'completed')
-                ->sum('session_fee'), 2),
+                ->sum('session_rate'), 2),
             'total_payouts' => round($therapist->payouts()->sum('amount'), 2),
         ];
     }

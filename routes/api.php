@@ -1401,7 +1401,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Calendar Events (shared across admin/CEO/COO/sales roles) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
-        Route::middleware(['auth:sanctum', 'role:admin|ceo|coo|cgo|sales|finder|closer|builder'])->group(function () {
+        Route::middleware(['auth:sanctum', 'role:admin|ceo|coo|cgo|sales|finder|closer|builder|clinical_advisor|hr'])->group(function () {
             Route::apiResource('calendar/events', \App\Http\Controllers\API\V1\CalendarEventController::class)
                 ->parameters(['events' => 'calendarEvent']);
         });

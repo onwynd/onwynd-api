@@ -26,3 +26,7 @@ Thumbs.db
 # Firebase service account — contains private key, NEVER commit
 storage/app/firebase-service-account.json
 *.service-account.json
+
+# Local env overrides — never commit
+.env.payment
+env.txt

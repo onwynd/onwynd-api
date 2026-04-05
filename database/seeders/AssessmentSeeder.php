@@ -73,10 +73,12 @@ class AssessmentSeeder extends Seeder
         ];
 
         foreach ($assessments as $data) {
-            $assessment = Assessment::create([
+            $slug = Str::slug($data['title']);
+            $assessment = Assessment::updateOrCreate(
+                ['slug' => $slug],
+                [
                 'uuid' => Str::uuid(),
                 'title' => $data['title'],
-                'slug' => Str::slug($data['title']),
                 'description' => $data['description'],
                 'type' => $data['type'],
                 'total_questions' => count($data['questions']),
@@ -111,7 +113,6 @@ class AssessmentSeeder extends Seeder
 
             foreach ($data['questions'] as $index => $qText) {
                 $questionData = [
-                    'question_text' => $qText,
                     'question_type' => 'scale',
                     'order_number' => $index + 1,
                     'is_required' => true,
@@ -129,7 +130,10 @@ class AssessmentSeeder extends Seeder
                     $questionData['scale_max'] = 5;
                     $questionData['scale_labels'] = ['0' => 'At no time', '5' => 'All of the time'];
                 }
-                $assessment->questions()->create($questionData);
+                $assessment->questions()->updateOrCreate(
+                    ['order_number' => $index + 1],
+                    [...$questionData, 'question_text' => $qText],
+                );
             }
         }
     }
