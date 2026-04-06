@@ -222,8 +222,8 @@ class SnapshotController extends BaseController
     {
         return [
             'total_leads'          => $this->newLeadsMtd(),
-            'deals_closed_mtd'     => class_exists(Deal::class) ? Deal::where('status', 'closed_won')->where('created_at', '>=', now()->startOfMonth())->count() : 0,
-            'pipeline_value'       => class_exists(Deal::class) ? (float) Deal::whereIn('status', ['prospecting', 'qualification', 'proposal', 'negotiation'])->sum('value') : 0,
+            'deals_closed_mtd'     => class_exists(Deal::class) ? Deal::where('stage', 'closed_won')->where('created_at', '>=', now()->startOfMonth())->count() : 0,
+            'pipeline_value'       => class_exists(Deal::class) ? (float) Deal::whereIn('stage', ['prospecting', 'qualification', 'proposal', 'negotiation'])->sum('value') : 0,
             'win_rate'             => 0,
             'avg_deal_size'        => 0,
             'revenue_target_pct'   => 0,
@@ -290,7 +290,7 @@ class SnapshotController extends BaseController
     {
         return [
             'total_leads'          => $this->newLeadsMtd(),
-            'deals_closed_mtd'     => class_exists(Deal::class) ? Deal::where('status', 'closed_won')->where('created_at', '>=', now()->startOfMonth())->count() : 0,
+            'deals_closed_mtd'     => class_exists(Deal::class) ? Deal::where('stage', 'closed_won')->where('created_at', '>=', now()->startOfMonth())->count() : 0,
             'win_rate'             => 0,
         ];
     }

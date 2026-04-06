@@ -33,20 +33,20 @@ class COOController extends BaseController
         // 1. Sales Pipeline Health
         $salesHealth = [
             'leads_this_week' => Lead::where('created_at', '>=', $thisWeek)->count(),
-            'deals_in_progress' => Deal::whereIn('status', ['proposal_sent', 'negotiation'])->count(),
-            'closed_this_month' => Deal::whereIn('status', ['won', 'lost'])
+            'deals_in_progress' => Deal::whereIn('stage', ['proposal_sent', 'negotiation'])->count(),
+            'closed_this_month' => Deal::whereIn('stage', ['closed_won', 'closed_lost'])
                 ->where('updated_at', '>=', $thisMonth)
                 ->count(),
             'win_rate' => Deal::where('updated_at', '>=', $thisMonth)
-                ->whereIn('status', ['won', 'lost'])
+                ->whereIn('stage', ['closed_won', 'closed_lost'])
                 ->count() > 0
-                    ? round((Deal::where('status', 'won')->where('updated_at', '>=', $thisMonth)->count() / Deal::whereIn('status', ['won', 'lost'])->where('updated_at', '>=', $thisMonth)->count()) * 100, 1)
+                    ? round((Deal::where('stage', 'closed_won')->where('updated_at', '>=', $thisMonth)->count() / Deal::whereIn('stage', ['closed_won', 'closed_lost'])->where('updated_at', '>=', $thisMonth)->count()) * 100, 1)
                     : 0,
             'stale_deals_amber' => Deal::where('updated_at', '<=', Carbon::now()->subDays(7))
-                ->whereNotIn('status', ['won', 'lost'])
+                ->whereNotIn('stage', ['closed_won', 'closed_lost'])
                 ->count(),
             'stale_deals_red' => Deal::where('updated_at', '<=', Carbon::now()->subDays(14))
-                ->whereNotIn('status', ['won', 'lost'])
+                ->whereNotIn('stage', ['closed_won', 'closed_lost'])
                 ->count(),
         ];
 
