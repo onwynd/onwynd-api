@@ -759,9 +759,9 @@ SYSTEM;
                 ],
             ];
 
-            [$apiKey, , $baseUrl] = $this->resolveProvider();
+            [$apiKey] = $this->resolveProvider();
 
-            $client   = new Client(['headers' => ['Authorization' => 'Bearer ' . config('services.groq.api_key'), 'Content-Type' => 'application/json']]);
+            $client   = new Client(['headers' => ['Authorization' => "Bearer {$apiKey}", 'Content-Type' => 'application/json']]);
             $response = $client->post('https://api.groq.com/openai/v1/chat/completions', ['json' => $summaryPayload]);
             $json     = json_decode($response->getBody()->getContents(), true);
             $summary  = data_get($json, 'choices.0.message.content');
@@ -870,7 +870,7 @@ SYSTEM;
         // Strip complete tags (handles nested brackets via recursive pattern)
         $result = preg_replace('/\[(NOTED|THERAPIST_RECOMMEND):\{(?:[^{}]|(?:\{[^{}]*\}))*\}\]/s', '', $text);
         // Strip [ED:...] debug tags
-        $result = preg_replace('/\[ED:.*?\]/s', $result ?? $text);
+        $result = preg_replace('/\[ED:.*?\]/s', '', $result ?? $text);
         return trim($result ?? $text);
     }
 
