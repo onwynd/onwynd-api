@@ -274,12 +274,12 @@ class ApprovalEngine
 
         // 8+ days: COO also reviews
         if ($days >= 8) {
-            $coo = User::whereHas('roles', fn ($q) => $q->whereIn('name', ['coo', 'vp_operations']))->first();
+            $coo = User::whereHas('roles', fn ($q) => $q->whereIn('role', ['coo', 'vp_operations']))->first();
             if ($coo) $steps[] = ['label' => 'COO Approval', 'approver_id' => $coo->id, 'role' => 'coo'];
         }
 
         // Always last: HR ratifies
-        $hr = User::whereHas('roles', fn ($q) => $q->where('name', 'hr'))->first();
+        $hr = User::whereHas('roles', fn ($q) => $q->where('role', 'hr'))->first();
         if ($hr) $steps[] = ['label' => 'HR Confirmation', 'approver_id' => $hr->id, 'role' => 'hr'];
 
         return $steps ?: [['label' => 'HR Approval', 'role' => 'hr', 'approver_id' => null]];
@@ -298,21 +298,21 @@ class ApprovalEngine
         }
 
         // COO
-        $coo = User::whereHas('roles', fn ($q) => $q->where('name', 'coo'))->first();
+        $coo = User::whereHas('roles', fn ($q) => $q->where('role', 'coo'))->first();
         if ($coo) $steps[] = ['label' => 'COO Approval', 'approver_id' => $coo->id, 'role' => 'coo'];
 
         // CEO
-        $ceo = User::whereHas('roles', fn ($q) => $q->where('name', 'ceo'))->first();
+        $ceo = User::whereHas('roles', fn ($q) => $q->where('role', 'ceo'))->first();
         if ($ceo) $steps[] = ['label' => 'CEO Approval', 'approver_id' => $ceo->id, 'role' => 'ceo'];
 
         // For large amounts: President also reviews
         if ($amount > 5_000_000) {
-            $president = User::whereHas('roles', fn ($q) => $q->where('name', 'president'))->first();
+            $president = User::whereHas('roles', fn ($q) => $q->where('role', 'president'))->first();
             if ($president) $steps[] = ['label' => 'President Sign-Off', 'approver_id' => $president->id, 'role' => 'president'];
         }
 
         // Finance final approval
-        $cfo = User::whereHas('roles', fn ($q) => $q->whereIn('name', ['cfo', 'finance']))->first();
+        $cfo = User::whereHas('roles', fn ($q) => $q->whereIn('role', ['cfo', 'finance']))->first();
         if ($cfo) $steps[] = ['label' => 'Finance Final Approval', 'approver_id' => $cfo->id, 'role' => 'cfo'];
 
         return $steps;
@@ -330,10 +330,10 @@ class ApprovalEngine
             $steps[] = ['label' => 'Department Head Approval', 'approver_id' => $record->department->head_user_id, 'role' => 'department_head'];
         }
 
-        $hr = User::whereHas('roles', fn ($q) => $q->where('name', 'hr'))->first();
+        $hr = User::whereHas('roles', fn ($q) => $q->where('role', 'hr'))->first();
         if ($hr) $steps[] = ['label' => 'HR Review', 'approver_id' => $hr->id, 'role' => 'hr'];
 
-        $coo = User::whereHas('roles', fn ($q) => $q->where('name', 'coo'))->first();
+        $coo = User::whereHas('roles', fn ($q) => $q->where('role', 'coo'))->first();
         if ($coo) $steps[] = ['label' => 'COO Final Approval', 'approver_id' => $coo->id, 'role' => 'coo'];
 
         return $steps;
@@ -348,10 +348,10 @@ class ApprovalEngine
             $steps[] = ['label' => 'Current Manager Release', 'approver_id' => $record->manager_id, 'role' => 'direct_manager'];
         }
 
-        $hr = User::whereHas('roles', fn ($q) => $q->where('name', 'hr'))->first();
+        $hr = User::whereHas('roles', fn ($q) => $q->where('role', 'hr'))->first();
         if ($hr) $steps[] = ['label' => 'HR Processing', 'approver_id' => $hr->id, 'role' => 'hr'];
 
-        $coo = User::whereHas('roles', fn ($q) => $q->where('name', 'coo'))->first();
+        $coo = User::whereHas('roles', fn ($q) => $q->where('role', 'coo'))->first();
         if ($coo) $steps[] = ['label' => 'COO Approval', 'approver_id' => $coo->id, 'role' => 'coo'];
 
         return $steps;
@@ -366,13 +366,13 @@ class ApprovalEngine
             $steps[] = ['label' => 'Manager Confirmation', 'approver_id' => $record->manager_id, 'role' => 'direct_manager'];
         }
 
-        $hr = User::whereHas('roles', fn ($q) => $q->where('name', 'hr'))->first();
+        $hr = User::whereHas('roles', fn ($q) => $q->where('role', 'hr'))->first();
         if ($hr) $steps[] = ['label' => 'HR Exit Process', 'approver_id' => $hr->id, 'role' => 'hr'];
 
-        $coo = User::whereHas('roles', fn ($q) => $q->where('name', 'coo'))->first();
+        $coo = User::whereHas('roles', fn ($q) => $q->where('role', 'coo'))->first();
         if ($coo) $steps[] = ['label' => 'COO Approval', 'approver_id' => $coo->id, 'role' => 'coo'];
 
-        $ceo = User::whereHas('roles', fn ($q) => $q->where('name', 'ceo'))->first();
+        $ceo = User::whereHas('roles', fn ($q) => $q->where('role', 'ceo'))->first();
         if ($ceo) $steps[] = ['label' => 'CEO Final Approval', 'approver_id' => $ceo->id, 'role' => 'ceo'];
 
         return $steps;
@@ -387,7 +387,7 @@ class ApprovalEngine
             $steps[] = ['label' => 'Manager Approval', 'approver_id' => $record->manager_id, 'role' => 'direct_manager'];
         }
 
-        $finance = User::whereHas('roles', fn ($q) => $q->whereIn('name', ['finance', 'cfo']))->first();
+        $finance = User::whereHas('roles', fn ($q) => $q->whereIn('role', ['finance', 'cfo']))->first();
         if ($finance) $steps[] = ['label' => 'Finance Approval', 'approver_id' => $finance->id, 'role' => 'finance'];
 
         return $steps;

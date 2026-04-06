@@ -13,7 +13,7 @@ class EmployeeController extends BaseController
     public function index(Request $request)
     {
         $employees = User::whereHas('roles', function ($q) {
-            $q->where('name', 'employee');
+            $q->where('role', 'employee');
         })
             ->with('profile')
             ->paginate($request->get('per_page', 20));

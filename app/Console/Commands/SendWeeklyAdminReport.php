@@ -33,7 +33,7 @@ class SendWeeklyAdminReport extends Command
 
         // Find all admins
         $admins = User::whereHas('roles', function ($q) {
-            $q->where('name', 'admin');
+            $q->where('role', 'admin');
         })->get();
 
         if ($admins->isEmpty()) {

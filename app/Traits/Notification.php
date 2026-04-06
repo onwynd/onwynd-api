@@ -174,8 +174,8 @@ trait Notification
 
     public function newOrderNotification(Order $order): void
     {
-        $adminFirebaseTokens = User::with(['roles' => fn ($q) => $q->where('name', 'admin')])
-            ->whereHas('roles', fn ($q) => $q->where('name', 'admin'))
+        $adminFirebaseTokens = User::with(['roles' => fn ($q) => $q->where('role', 'admin')])
+            ->whereHas('roles', fn ($q) => $q->where('role', 'admin'))
             ->whereNotNull('firebase_token')
             ->pluck('firebase_token', 'id')
             ->toArray();

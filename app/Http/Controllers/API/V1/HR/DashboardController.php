@@ -35,7 +35,7 @@ class DashboardController extends BaseController
     {
         $totalEmployees = User::whereHas('role', fn ($q) => $q->where('slug', 'employee'))->count();
         $activeEmployees = User::whereHas('role', fn ($q) => $q->where('slug', 'employee'))
-            ->where('status', 'active')->count();
+            ->where('is_active', true)->count();
 
         $pendingLeave = LeaveRequest::where('status', 'pending')->count();
         $approvedLeave = LeaveRequest::where('status', 'approved')

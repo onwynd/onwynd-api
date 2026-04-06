@@ -36,7 +36,7 @@ class AdminReportService
         // Active Therapists (Mock logic: logged in this week or had a session)
         // Assuming 'therapist' role exists
         $activeTherapists = User::whereHas('roles', function ($q) {
-            $q->where('name', 'therapist');
+            $q->where('role', 'therapist');
         })->count();
 
         // Sessions Held

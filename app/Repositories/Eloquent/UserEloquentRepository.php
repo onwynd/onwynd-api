@@ -20,7 +20,7 @@ class UserEloquentRepository extends BaseRepository implements UserRepositoryInt
     public function getTherapists(): mixed
     {
         return $this->model->whereHas('roles', function ($q) {
-            $q->where('name', 'therapist');
+            $q->where('role', 'therapist');
         })->get();
     }
 }

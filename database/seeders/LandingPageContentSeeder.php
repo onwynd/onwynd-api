@@ -9,8 +9,6 @@ class LandingPageContentSeeder extends Seeder
 {
     public function run()
     {
-        // Clear existing landing page content to avoid conflicts
-        LandingPageContent::whereIn('section', ['hero', 'statistics', 'features', 'benefits_1', 'benefits_2', 'benefits_3', 'cta', 'blog'])->delete();
 
         $content = [
             // Hero Section
@@ -500,7 +498,10 @@ class LandingPageContentSeeder extends Seeder
         ];
 
         foreach ($content as $item) {
-            LandingPageContent::create($item);
+            LandingPageContent::updateOrCreate(
+                ['section' => $item['section'], 'key' => $item['key']],
+                $item,
+            );
         }
     }
 }
