@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Content\Testimonial;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class TestimonialSeeder extends Seeder
 {
@@ -25,7 +24,7 @@ class TestimonialSeeder extends Seeder
             [
                 'name' => 'Chidinma Okafor',
                 'role' => 'Business Owner, Lagos',
-                'avatar_url' => '/images/testimonials/chidinma-okafor.jpg',
+                'avatar_url' => '/storage/testimonials/chidinma-okafor.jpg',
                 'stats_text' => '502 Total Conversations',
                 'quote' => "As a Nigerian entrepreneur, stress was affecting my business decisions. Onwynd helped me find balance. The support is truly life-changing!",
                 'conversation_history' => [
@@ -49,7 +48,7 @@ class TestimonialSeeder extends Seeder
             [
                 'name' => 'Ibrahim Yusuf',
                 'role' => 'Software Developer, Abuja',
-                'avatar_url' => '/images/testimonials/ibrahim-yusuf.jpg',
+                'avatar_url' => '/storage/testimonials/ibrahim-yusuf.jpg',
                 'stats_text' => '318 Total Conversations',
                 'quote' => "I was skeptical about mental health apps, but Onwynd changed my perspective. The AI chatbot understands our Nigerian context better than I expected.",
                 'conversation_history' => null,
@@ -60,7 +59,7 @@ class TestimonialSeeder extends Seeder
             [
                 'name' => 'Funke Adeyemi',
                 'role' => 'University Student, Ibadan',
-                'avatar_url' => '/images/testimonials/funke-adeyemi.jpg',
+                'avatar_url' => '/storage/testimonials/funke-adeyemi.jpg',
                 'stats_text' => '241 Total Conversations',
                 'quote' => "Dealing with exam pressure was overwhelming until I found Onwynd. The 24/7 support helped me during late-night study sessions. Affordable and effective!",
                 'conversation_history' => null,
@@ -71,7 +70,7 @@ class TestimonialSeeder extends Seeder
             [
                 'name' => 'Emeka Nwankwo',
                 'role' => 'Teacher, Port Harcourt',
-                'avatar_url' => '/images/testimonials/emeka-nwankwo.jpg',
+                'avatar_url' => '/storage/testimonials/emeka-nwankwo.jpg',
                 'stats_text' => '189 Total Conversations',
                 'quote' => "Managing work stress and family responsibilities was difficult. Onwynd gave me practical tools that fit into my busy Nigerian lifestyle. Highly recommended!",
                 'conversation_history' => null,
@@ -82,9 +81,9 @@ class TestimonialSeeder extends Seeder
         ];
 
         foreach ($testimonials as $data) {
-            Testimonial::firstOrCreate(
+            Testimonial::updateOrCreate(
                 ['name' => $data['name']],
-                array_merge($data, ['uuid' => (string) Str::uuid()])
+                $data
             );
         }
     }

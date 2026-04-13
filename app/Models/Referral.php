@@ -10,6 +10,7 @@ class Referral extends Model
     protected $fillable = [
         'uuid',
         'ambassador_id',
+        'therapist_id',
         'referred_user_id',
         'plan_id',
         'status',

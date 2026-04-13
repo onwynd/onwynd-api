@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRules;
 
 class PasswordResetController extends BaseController
@@ -42,11 +41,16 @@ class PasswordResetController extends BaseController
             );
         }
 
-        // Firebase / social login user — has firebase_uid and no manually-set password
-        if ($user->firebase_uid && str_ends_with($user->email, '@anonymous.onwynd.com') === false) {
+        // Pure social users (Google, phone) never had an email password — block reset.
+        // Firebase email/password users (auth_provider = 'email') CAN reset to establish
+        // a direct API password while Firebase is suspended.
+        $isSocialOnly = $user->firebase_uid
+            && in_array($user->auth_provider ?? '', ['google', 'phone', 'anonymous'], true);
+
+        if ($isSocialOnly) {
             return $this->sendResponse(
                 ['status' => 'social_login'],
-                'This account was created with Google. Sign in with Google instead.'
+                'This account uses social sign-in (Google/phone). Password reset is not available.'
             );
         }
 
@@ -74,10 +78,9 @@ class PasswordResetController extends BaseController
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function ($user, $password) {
                 $user->forceFill([
-                    'password' => Hash::make($password),
-                ])->setRememberToken(Str::random(60));
-
-                $user->save();
+                    'password'     => Hash::make($password),
+                    'has_password' => true,
+                ])->save();
             }
         );
 

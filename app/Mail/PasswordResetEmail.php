@@ -10,16 +10,18 @@ class PasswordResetEmail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public $url;
+    public string $url;
+    public string $name;
 
-    public function __construct($url)
+    public function __construct(string $url, string $name = '')
     {
-        $this->url = $url;
+        $this->url  = $url;
+        $this->name = $name;
     }
 
-    public function build()
+    public function build(): static
     {
-        return $this->subject('Reset Password Notification')
+        return $this->subject('Reset your Onwynd password')
             ->view('emails.auth.reset-password');
     }
 }

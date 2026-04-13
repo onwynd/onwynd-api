@@ -105,7 +105,8 @@ class NotificationService
     {
         try {
             $alreadySent = NotificationModel::where('user_id', $user->id)
-                ->where('type', \App\Notifications\WelcomeNotification::class)
+                ->where('type', 'system')
+                ->where('title', 'Welcome to Onwynd')
                 ->exists();
 
             if ($alreadySent) {
@@ -113,7 +114,13 @@ class NotificationService
                 return;
             }
 
-            $user->notify(new \App\Notifications\WelcomeNotification);
+            NotificationModel::create([
+                'user_id'    => $user->id,
+                'type'       => 'system',
+                'title'      => 'Welcome to Onwynd',
+                'message'    => 'You\'re all set. Complete onboarding to personalise your journey.',
+                'action_url' => '/onboarding',
+            ]);
         } catch (\Exception $e) {
             Log::error('Failed to send welcome notification', ['error' => $e->getMessage()]);
         }

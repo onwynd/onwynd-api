@@ -4,22 +4,20 @@ namespace App\Services\PushNotification;
 
 use App\Models\PushSubscription;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Kreait\Firebase\Factory;
 
 /**
- * Minimal Web Push sender.
+ * Firebase Cloud Messaging (FCM) push notification sender.
  *
- * Sends a push notification payload to a user's registered push subscription
- * endpoints using the Web Push Protocol.
+ * Sends push notifications to Web clients using Firebase Cloud Messaging.
+ * Supports both web (via service workers) and device subscriptions.
  *
- * Requires VAPID keys in env:
- *   VAPID_PUBLIC_KEY=<base64url-encoded public key>
- *   VAPID_PRIVATE_KEY=<base64url-encoded private key>
- *   VAPID_SUBJECT=mailto:admin@onwynd.com
- *
- * For production, install `minishlink/web-push` via composer for full VAPID
- * encryption support:
- *   composer require minishlink/web-push
+ * Requires Firebase setup:
+ * - FIREBASE_PROJECT_ID env variable
+ * - FIREBASE_CREDENTIALS json key file path in env
+ * - Service account JSON file with Cloud Messaging permissions
  */
 class WebPushService
 {
@@ -30,7 +28,7 @@ class WebPushService
      */
     public function sendToUser(User $user, array $payload): void
     {
-        $subscriptions = PushSubscription::where('user_id', $user->id)->get();
+        $subscriptions = $user->pushSubscriptions()->get();
 
         if ($subscriptions->isEmpty()) {
             return;
@@ -42,69 +40,74 @@ class WebPushService
     }
 
     /**
-     * Send to a single PushSubscription.
+     * Send to a single PushSubscription using Firebase Cloud Messaging.
      */
     private function sendToSubscription(PushSubscription $subscription, array $payload): void
     {
         try {
-            // Check if minishlink/web-push is available
-            if (! class_exists(\Minishlink\WebPush\WebPush::class)) {
-                // Fallback: log the notification (install web-push package to enable actual sending)
-                Log::info('WebPush (install minishlink/web-push to enable): notification queued', [
-                    'user_id' => $subscription->user_id,
-                    'endpoint' => substr($subscription->endpoint, 0, 60).'...',
-                    'payload' => $payload,
+            $projectId = config('services.firebase.project_id');
+            $credentialsPath = config('services.firebase.credentials');
+
+            if (! $projectId || ! $credentialsPath || ! file_exists($credentialsPath)) {
+                Log::warning('Firebase not configured — push notifications disabled', [
+                    'has_project_id' => (bool) $projectId,
+                    'has_credentials' => (bool) $credentialsPath,
+                    'credentials_exist' => file_exists($credentialsPath ?? ''),
                 ]);
 
                 return;
             }
 
-            $vapidPublic = config('services.vapid.public_key');
-            $vapidPrivate = config('services.vapid.private_key');
-            $vapidSubject = config('services.vapid.subject', 'mailto:admin@onwynd.com');
+            $factory = (new Factory)->withServiceAccount($credentialsPath);
+            $messaging = $factory->createMessaging();
 
-            if (! $vapidPublic || ! $vapidPrivate) {
-                Log::warning('VAPID keys not configured — push notifications disabled');
-
-                return;
-            }
-
-            $webPush = new \Minishlink\WebPush\WebPush([
-                'VAPID' => [
-                    'subject' => $vapidSubject,
-                    'publicKey' => $vapidPublic,
-                    'privateKey' => $vapidPrivate,
+            // Build FCM message from payload
+            $message = [
+                'webpush' => [
+                    'headers' => [
+                        'TTL' => '3600', // 1 hour
+                    ],
+                    'data' => [
+                        'title' => $payload['title'] ?? 'Notification',
+                        'body' => $payload['body'] ?? '',
+                        'icon' => $payload['icon'] ?? '',
+                        'tag' => $payload['tag'] ?? '',
+                        'url' => $payload['url'] ?? '',
+                    ],
+                    'notification' => [
+                        'title' => $payload['title'] ?? 'Notification',
+                        'body' => $payload['body'] ?? '',
+                        'icon' => $payload['icon'] ?? '',
+                    ],
                 ],
+            ];
+
+            // Send to the subscription endpoint (treated as FCM token for web)
+            $result = $messaging->send([
+                'token' => $subscription->endpoint,
+                ...$message,
             ]);
 
-            $sub = \Minishlink\WebPush\Subscription::create([
-                'endpoint' => $subscription->endpoint,
-                'contentEncoding' => $subscription->content_encoding,
-                'keys' => [
-                    'auth' => $subscription->auth_token,
-                    'p256dh' => $subscription->public_key,
-                ],
-            ]);
-
-            $webPush->queueNotification($sub, json_encode($payload));
-
-            foreach ($webPush->flush() as $report) {
-                if (! $report->isSuccess()) {
-                    Log::warning('WebPush send failed', [
-                        'reason' => $report->getReason(),
-                        'endpoint' => $report->getEndpoint(),
-                    ]);
-                    // Expired/invalid subscription — remove it
-                    if ($report->isSubscriptionExpired()) {
-                        PushSubscription::where('endpoint', $report->getEndpoint())->delete();
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            Log::error('WebPushService error', [
+            Log::info('FCM notification sent successfully', [
+                'message_id' => $result,
                 'user_id' => $subscription->user_id,
-                'message' => $e->getMessage(),
             ]);
+        } catch (\Throwable $e) {
+            Log::error('WebPushService FCM error', [
+                'user_id' => $subscription->user_id,
+                'endpoint' => substr($subscription->endpoint ?? '', 0, 60),
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ]);
+
+            // Check if subscription is invalid/expired
+            if (
+                str_contains($e->getMessage(), 'registration token is invalid') ||
+                str_contains($e->getMessage(), 'Mismatched credential format')
+            ) {
+                PushSubscription::where('endpoint', $subscription->endpoint)->delete();
+                Log::info('Deleted invalid push subscription', ['user_id' => $subscription->user_id]);
+            }
         }
     }
 }

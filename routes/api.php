@@ -51,6 +51,7 @@ use App\Http\Controllers\API\V1\Auth\EmailVerificationController;
 use App\Http\Controllers\API\V1\Auth\PasswordResetController;
 use App\Http\Controllers\API\V1\Auth\PatientInviteAcceptController;
 use App\Http\Controllers\API\V1\Therapist\PatientInviteController as TherapistPatientInviteController;
+use App\Http\Controllers\API\V1\Therapist\TherapistReferralController;
 use App\Http\Controllers\API\V1\Chat\CategoryController as ChatCategoryController;
 use App\Http\Controllers\API\V1\ConfigController;
 // Therapist Controllers
@@ -174,6 +175,13 @@ use App\Http\Controllers\ClinicalAdvisor\CommunicationController;
 use App\Http\Controllers\ClinicalAdvisor\SessionReviewController;
 use App\Http\Controllers\API\V1\Admin\SessionAuditController;
 use Illuminate\Support\Facades\Route;
+
+// API-first app: ensure a named "login" route exists so framework auth middleware
+// never throws RouteNotFoundException when an unauthenticated request slips through
+// without JSON expectations (e.g., missing Accept header).
+Route::get('/login', function () {
+    return response()->json(['message' => 'Unauthenticated.'], 401);
+})->name('login');
 
 Route::prefix('v1')->group(function () {
     // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ AI Audit Agent webhooks (no Sanctum auth ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â verified by AUDIT_AGENT_SECRET header) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -595,6 +603,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('assessments/guest')->group(function () {
             Route::post('submit', [\App\Http\Controllers\API\V1\Assessment\GuestAssessmentController::class, 'submit']);
             Route::get('{guest_token}', [\App\Http\Controllers\API\V1\Assessment\GuestAssessmentController::class, 'show']);
+            Route::get('pending', [\App\Http\Controllers\API\V1\Assessment\GuestAssessmentController::class, 'pendingPublic']);
         });
 
         // Therapy Audio Session Routes
@@ -690,6 +699,9 @@ Route::prefix('v1')->group(function () {
             Route::apiResource('assessments', PatientAssessmentController::class);
             // Guest assessment linking (requires authentication)
             Route::post('assessments/guest/link', [\App\Http\Controllers\API\V1\Assessment\GuestAssessmentController::class, 'link']);
+            // Pending guest assessment (HttpOnly cookie) attach flow
+            Route::get('assessments/guest/pending', [\App\Http\Controllers\API\V1\Assessment\GuestAssessmentController::class, 'pending']);
+            Route::post('assessments/guest/attach', [\App\Http\Controllers\API\V1\Assessment\GuestAssessmentController::class, 'attach']);
             // Chat routes
             Route::apiResource('chats', PatientChatController::class);
             Route::delete('chat/conversations/{id}', [PatientChatController::class, 'destroy']);
@@ -972,6 +984,8 @@ Route::prefix('v1')->group(function () {
             Route::post('patient-invites', [TherapistPatientInviteController::class, 'store']);
             Route::get('patient-invites', [TherapistPatientInviteController::class, 'index']);
             Route::delete('patient-invites/{patientInvite}', [TherapistPatientInviteController::class, 'destroy']);
+            Route::get('referrals', [TherapistReferralController::class, 'index']);
+            Route::patch('referrals/{id}', [TherapistReferralController::class, 'updateStatus']);
 
             // Session confirmation endpoint
             Route::post('sessions/{id}/confirm', [TherapistSessionController::class, 'confirmSession']);
@@ -1614,7 +1628,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Sales routes
-        Route::prefix('sales')->middleware(['role:sales|vp_sales'])->group(function () {
+        Route::prefix('sales')->middleware(['role:sales|vp_sales|ceo|coo|cgo|president|admin'])->group(function () {
             Route::get('dashboard', [SalesDashboardController::class, 'index']);
             Route::get('stats', [SalesDashboardController::class, 'stats']);
             Route::get('notifications', [SalesNotificationController::class, 'index']);
@@ -1688,7 +1702,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Finance routes
-        Route::prefix('finance')->middleware(['role:finance|admin'])->group(function () {
+        Route::prefix('finance')->middleware(['role:finance|admin|ceo|coo|cfo|president|cgo|audit'])->group(function () {
             Route::get('dashboard', [FinanceDashboardController::class, 'index']);
             Route::get('stats', [FinanceDashboardController::class, 'stats']);
             Route::get('transactions', [FinanceDashboardController::class, 'transactions']);
@@ -1701,7 +1715,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Admin Payment & Refund Management
-        Route::prefix('admin/payments')->middleware(['role:admin|finance'])->group(function () {
+        Route::prefix('admin/payments')->middleware(['role:admin|finance|ceo|cfo|president'])->group(function () {
             Route::get('/', [\App\Http\Controllers\API\V1\Admin\PaymentManagementController::class, 'index']);
             Route::get('refunds', [\App\Http\Controllers\API\V1\Admin\PaymentManagementController::class, 'refunds']);
             Route::post('{payment}/refund', [\App\Http\Controllers\API\V1\Admin\PaymentManagementController::class, 'refund']);

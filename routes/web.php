@@ -2,6 +2,15 @@
 
 use Illuminate\Support\Facades\Route;
 
+// Some middleware (e.g. Authenticate) may redirect unauthenticated browser requests
+// to a named "login" route. This project is API-first and doesn't ship a login page,
+// so we define a minimal route to prevent RouteNotFoundException noise.
+Route::get('/login', function () {
+    return response()->json([
+        'message' => 'Unauthenticated.',
+    ], 401);
+})->name('login');
+
 Route::get('/', function () {
     return view('onwynd');
 });

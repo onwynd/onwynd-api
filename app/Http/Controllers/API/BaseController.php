@@ -66,10 +66,25 @@ class BaseController extends Controller
             '/',
             $this->authCookieDomain($request),
             $request->isSecure(),
-            true,
+            true, // httpOnly
             false,
             $request->isSecure() ? 'none' : 'lax',
         );
+    }
+
+    protected function makeRoleCookies(Request $request, $user): array
+    {
+        $domain = $this->authCookieDomain($request);
+        $secure = $request->isSecure();
+        $expiry = 60 * 24 * 30; // 30 days
+
+        $roleSlug = $user->role->slug ?? 'patient';
+        $allRoles = method_exists($user, 'allRoles') ? $user->allRoles() : [$roleSlug];
+
+        return [
+            app(CookieFactory::class)->make('user_role', $roleSlug, $expiry, '/', $domain, $secure, true, false, 'lax'),
+            app(CookieFactory::class)->make('user_all_roles', json_encode($allRoles), $expiry, '/', $domain, $secure, true, false, 'lax'),
+        ];
     }
 
     protected function makeExpiredAuthCookie(Request $request): Cookie

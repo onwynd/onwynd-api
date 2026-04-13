@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\V1\Admin;
 
 use App\Http\Controllers\API\BaseController;
+use App\Http\DTOs\UserDTO;
 use App\Models\Admin\AdminLog;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -13,7 +14,7 @@ class UserManagementController extends BaseController
 {
     public function index(Request $request)
     {
-        $users = User::with('role')
+        $users = User::with(['role', 'activeSubscription.plan'])
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('first_name', 'like', "%{$search}%")
@@ -28,71 +29,18 @@ class UserManagementController extends BaseController
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 
-        $data = $users->getCollection()->transform(function ($u) {
-            $latestSub = \App\Models\Subscription::where('user_id', $u->id)
-                ->orderByDesc('created_at')
-                ->with('plan')
-                ->first();
-            $comped = false;
-            $approvedBy = null;
-            if ($latestSub) {
-                $al = \App\Models\Admin\AdminLog::where('action', 'upgrade_subscription')
-                    ->where('target_type', \App\Models\Subscription::class)
-                    ->where('target_id', $latestSub->id)
-                    ->orderByDesc('id')
-                    ->first();
-                if ($al) {
-                    $details = $al->details ?? [];
-                    $comped = (bool) ($details['comped'] ?? false);
-                    $approver = $al->user()->first();
-                    if ($approver) {
-                        $approvedBy = trim(($approver->first_name ?? '').' '.($approver->last_name ?? '')) ?: $approver->email;
-                    }
-                }
-            }
-
-            return [
-                'id' => $u->id,
-                'uuid' => $u->uuid,
-                'first_name' => $u->first_name,
-                'last_name' => $u->last_name,
-                'name' => $u->name ?? trim(($u->first_name ?? '').' '.($u->last_name ?? '')),
-                'email' => $u->email,
-                'role' => $u->role?->slug,
-                'profile_photo' => $u->profile_photo,
-                'is_active' => (bool) ($u->is_active ?? true),
-                'current_plan' => $latestSub?->plan?->name ?? null,
-                'current_plan_slug' => $latestSub?->plan?->slug ?? null,
-                'subscription_status' => $latestSub?->status ?? null,
-                'comped_upgrade_approved' => $comped,
-                'comped_approved_by'      => $approvedBy,
-                'auth_provider'                => $u->auth_provider,
-                'signup_source'               => $u->signup_source,
-                'signup_utm_medium'            => $u->signup_utm_medium,
-                'signup_utm_campaign'          => $u->signup_utm_campaign,
-                'referred_by_ambassador_code'  => $u->referred_by_ambassador_code,
-                'referral_ai_bonus'            => $u->referral_ai_bonus ?? 0,
-                'pending_referral_discount'    => $u->pending_referral_discount ?? 0,
-                'created_at'                   => $u->created_at,
-            ];
+        $users->getCollection()->transform(function ($user) {
+            return UserDTO::fromModel($user);
         });
 
-        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
-            $data,
-            $users->total(),
-            $users->perPage(),
-            $users->currentPage(),
-            ['path' => \Illuminate\Pagination\Paginator::resolveCurrentPath()]
-        );
-
-        return $this->sendResponse($paginated, 'Users retrieved successfully.');
+        return $this->sendResponse($users, 'Users retrieved successfully.');
     }
 
     public function show(User $user)
     {
-        $user->load(['roles', 'profile']);
+        $user->load(['roles', 'profile', 'activeSubscription.plan']);
 
-        return $this->sendResponse($user, 'User details retrieved successfully.');
+        return $this->sendResponse(UserDTO::fromModel($user), 'User details retrieved successfully.');
     }
 
     public function store(Request $request)

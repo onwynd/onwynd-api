@@ -378,6 +378,7 @@ class AICompanionController extends BaseController
             ]);
 
             $body = $response->getBody();
+            $upstreamLineBuffer = '';
 
             while (! $body->eof()) {
                 $chunk = $body->read(512);   // smaller reads = lower latency per token
@@ -386,9 +387,16 @@ class AICompanionController extends BaseController
                     continue;
                 }
 
-                $lines = preg_split('/\r?\n/', $chunk);
+                // Provider SSE events can be split across TCP reads. Keep a rolling line buffer
+                // so we only parse complete "data: {...}" lines.
+                $upstreamLineBuffer .= $chunk;
+                $parts = preg_split('/\r?\n/', $upstreamLineBuffer);
+                if ($parts === false) {
+                    continue;
+                }
+                $upstreamLineBuffer = array_pop($parts) ?? '';
 
-                foreach ($lines as $line) {
+                foreach ($parts as $line) {
                     if (! str_starts_with($line, 'data:')) {
                         continue;
                     }
@@ -451,6 +459,68 @@ class AICompanionController extends BaseController
                     // No tag in buffer — safe to stream
                     // But hold back the last 30 chars in case a tag opener
                     // is split across the next chunk boundary
+                    $safeLength = max(0, strlen($buffer) - 30);
+                    if ($safeLength > 0) {
+                        $this->sseData(substr($buffer, 0, $safeLength));
+                        $buffer = substr($buffer, $safeLength);
+                    }
+                }
+            }
+
+            // Flush any final complete buffered line after stream EOF.
+            if ($upstreamLineBuffer !== '') {
+                $parts = preg_split('/\r?\n/', $upstreamLineBuffer) ?: [];
+                foreach ($parts as $line) {
+                    if (! str_starts_with($line, 'data:')) {
+                        continue;
+                    }
+                    $json = trim(substr($line, 5));
+                    if ($json === '[DONE]') {
+                        continue;
+                    }
+                    $data = json_decode($json, true);
+                    $delta = data_get($data, 'choices.0.delta.content');
+                    if (! $delta) {
+                        continue;
+                    }
+
+                    $assistantText .= $delta;
+                    $buffer .= $delta;
+
+                    if ($inTag) {
+                        $closePos = $this->findTagClose($buffer);
+                        if ($closePos !== false) {
+                            $buffer = ltrim(substr($buffer, $closePos + 1));
+                            $inTag = false;
+                            if ($buffer !== '') {
+                                $this->sseData($buffer);
+                                $buffer = '';
+                            }
+                        }
+                        continue;
+                    }
+
+                    $tagPos = $this->findTagOpener($buffer, $tagOpeners);
+                    if ($tagPos !== false) {
+                        $safe = substr($buffer, 0, $tagPos);
+                        if ($safe !== '') {
+                            $this->sseData($safe);
+                        }
+                        $buffer = substr($buffer, $tagPos);
+                        $inTag = true;
+
+                        $closePos = $this->findTagClose($buffer);
+                        if ($closePos !== false) {
+                            $buffer = ltrim(substr($buffer, $closePos + 1));
+                            $inTag = false;
+                            if ($buffer !== '') {
+                                $this->sseData($buffer);
+                                $buffer = '';
+                            }
+                        }
+                        continue;
+                    }
+
                     $safeLength = max(0, strlen($buffer) - 30);
                     if ($safeLength > 0) {
                         $this->sseData(substr($buffer, 0, $safeLength));
@@ -869,8 +939,11 @@ SYSTEM;
     {
         // Strip complete tags (handles nested brackets via recursive pattern)
         $result = preg_replace('/\[(NOTED|THERAPIST_RECOMMEND):\{(?:[^{}]|(?:\{[^{}]*\}))*\}\]/s', '', $text);
-        // Strip [ED:...] debug tags
+        // Strip [ED:...] / [ED{...}] debug tags (model sometimes omits the colon)
         $result = preg_replace('/\[ED:.*?\]/s', '', $result ?? $text);
+        $result = preg_replace('/\[ED\{.*?\}\]/s', '', $result ?? $text);
+        // Trailing partial internal leaks
+        $result = preg_replace('/\[(NOTED|NOT|THERAPIST[\w_]*|ED)(?::\{?|\{)?[\s\S]*$/i', '', $result ?? $text);
         return trim($result ?? $text);
     }
 

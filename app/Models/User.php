@@ -589,5 +589,30 @@ class User extends Authenticatable implements MustVerifyEmail
 
         Mail::to($this->email)->send(new ConfirmEmail($signedUrl));
     }
+
+    /**
+     * The users table has no remember_token column — disable it entirely.
+     */
+    public function getRememberTokenName(): string
+    {
+        return '';
+    }
+
+    /**
+     * Send the password reset email using the branded PasswordResetEmail mailable.
+     * Overrides Laravel's default which requires a named web route (password.reset)
+     * that doesn't exist in this API-only app. Sent synchronously — no queue needed.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $resetUrl = rtrim(config('frontend.url', 'https://onwynd.com'), '/')
+            .'/auth/reset-password'
+            .'?token='.urlencode($token)
+            .'&email='.urlencode($this->email);
+
+        Mail::to($this->email)->send(
+            new \App\Mail\PasswordResetEmail($resetUrl, $this->first_name ?? '')
+        );
+    }
 }
 

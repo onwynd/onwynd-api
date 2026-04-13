@@ -25,7 +25,7 @@ class BookSessionRequest extends FormRequest
             'therapist_uuid' => 'nullable|string|exists:users,uuid',
             'scheduled_at' => 'nullable|date|after_or_equal:now',
             'session_type' => 'nullable|in:consultation,follow_up,intensive,video,audio,chat',
-            'duration_minutes' => 'nullable|integer|in:30,45,60,90,120',
+            'duration_minutes' => 'nullable|integer|in:30,35,45,60,90,120',
             'notes' => 'nullable|string|max:1000',
             'participants' => 'nullable|array',
             'participants.*' => 'exists:users,id',
@@ -47,7 +47,7 @@ class BookSessionRequest extends FormRequest
             'therapist_id.exists' => 'Selected therapist not found',
             'therapist_uuid.exists' => 'Selected therapist not found',
             'session_date.after_or_equal' => 'Session date must be today or later',
-            'duration_minutes.in' => 'Duration must be 30, 45, 60, 90, or 120 minutes',
+            'duration_minutes.in' => 'Duration must be 30, 35, 45, 60, 90, or 120 minutes',
         ];
     }
 }

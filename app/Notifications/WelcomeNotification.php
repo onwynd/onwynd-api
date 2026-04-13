@@ -44,7 +44,9 @@ class WelcomeNotification extends Notification
     public function toArray(object $notifiable): array
     {
         return [
-            //
+            'title' => 'Welcome to Onwynd',
+            'message' => 'You’re all set. Complete onboarding to personalize your journey.',
+            'action_url' => '/onboarding',
         ];
     }
 }

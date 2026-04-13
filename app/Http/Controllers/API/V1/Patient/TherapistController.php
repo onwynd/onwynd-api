@@ -237,7 +237,7 @@ class TherapistController extends BaseController
                             ->where('day_of_week', $dayNum);
                     })->orWhere(function ($s) use ($date) {
                         $s->where('is_recurring', false)
-                            ->where('specific_date', $date);
+                            ->whereDate('specific_date', $date);
                     });
                 })
                 ->orderBy('start_time')
@@ -264,11 +264,26 @@ class TherapistController extends BaseController
             ], 'Availability retrieved successfully.');
         }
 
-        // No date → return which integer days of week this therapist recurs on
-        $availableDays = TherapistAvailability::where('therapist_id', $therapist->id)
+        // No date → weekday hints for the calendar (0=Sun … 6=Sat).
+        // Include recurring days plus weekdays of upcoming one-off (specific_date) rows so
+        // seeded specific-date availability still shows strikethrough / hints correctly.
+        $recurringDays = TherapistAvailability::where('therapist_id', $therapist->id)
             ->where('is_available', true)
             ->where('is_recurring', true)
             ->pluck('day_of_week')
+            ->all();
+
+        $specificWeekdays = TherapistAvailability::where('therapist_id', $therapist->id)
+            ->where('is_available', true)
+            ->where('is_recurring', false)
+            ->whereNotNull('specific_date')
+            ->whereDate('specific_date', '>=', now()->toDateString())
+            ->pluck('specific_date')
+            ->map(fn ($d) => (int) date('w', strtotime((string) $d)))
+            ->all();
+
+        $availableDays = collect($recurringDays)
+            ->merge($specificWeekdays)
             ->unique()
             ->sort()
             ->values()

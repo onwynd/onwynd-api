@@ -54,16 +54,23 @@ class PaystackService
     public function initializePayment($amount, $email, $reference, $metadata = []): array
     {
         try {
+            $payload = [
+                'amount'       => (int) ($amount * 100),
+                'email'        => $email,
+                'reference'    => $reference,
+                'metadata'     => $metadata,
+                'callback_url' => config('services.paystack.callback_url'),
+            ];
+            // Pass currency explicitly so Paystack routes USD charges correctly
+            // when the account is enabled for multi-currency.
+            if (!empty($metadata['currency']) && strtoupper($metadata['currency']) !== 'NGN') {
+                $payload['currency'] = strtoupper($metadata['currency']);
+            }
+
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer '.$this->secretKey,
-                'Content-Type' => 'application/json',
-            ])->post("{$this->baseUrl}/transaction/initialize", [
-                'amount' => (int) ($amount * 100),
-                'email' => $email,
-                'reference' => $reference,
-                'metadata' => $metadata,
-                'callback_url' => config('services.paystack.callback_url'),
-            ]);
+                'Content-Type'  => 'application/json',
+            ])->post("{$this->baseUrl}/transaction/initialize", $payload);
 
             if ($response->successful() && $response->json('status')) {
                 $data = $response->json('data');

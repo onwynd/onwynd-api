@@ -593,8 +593,16 @@ class PaymentProcessor
             }
         }
 
-        // USD / international: DodoPayments → Stripe
-        foreach (['dodopayments', 'stripe'] as $gw) {
+        // USD / international: DodoPayments → Stripe → Paystack (if admin enabled it for USD)
+        $usdChain = ['dodopayments', 'stripe'];
+        $paystackAcceptsUsd = filter_var(
+            \App\Models\Setting::where('group', 'gateways')->where('key', 'paystack_accept_usd')->value('value') ?? 'false',
+            FILTER_VALIDATE_BOOLEAN
+        );
+        if ($paystackAcceptsUsd) {
+            $usdChain[] = 'paystack';
+        }
+        foreach ($usdChain as $gw) {
             if ($this->gatewayAvailable($gw)) {
                 return $gw;
             }
@@ -630,14 +638,16 @@ class PaymentProcessor
 
         return match ($gateway) {
             'paystack' => $this->retryWithBackoff(function () use ($payment, $reference, $metadata, $customerEmail, $customerName) {
+                $currencySymbol = strtoupper($payment->currency ?? 'NGN') === 'NGN' ? '₦' : '$';
                 return $this->paystackService->initializePayment(
                     $payment->amount,
                     $customerEmail,
                     $reference,
                     array_merge($metadata, [
                         'customer_name' => $customerName,
-                        'title' => 'ONWYND Payment - ₦'.number_format($payment->amount),
-                        'description' => $payment->description ?? 'Therapy session payment',
+                        'currency'      => strtoupper($payment->currency ?? 'NGN'),
+                        'title'         => 'ONWYND Payment - '.$currencySymbol.number_format($payment->amount),
+                        'description'   => $payment->description ?? 'Therapy session payment',
                     ])
                 );
             }),

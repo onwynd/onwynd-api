@@ -9,7 +9,6 @@ use App\Http\Requests\Payment\VerifyPaymentRequest;
 use App\Models\Payment;
 use App\Models\Payment\Subscription as PaymentSubscription;
 use App\Models\Setting;
-use App\Models\Subscription as LegacySubscription;
 use App\Models\SubscriptionPlan;
 use App\Models\GroupSession;
 use App\Models\TherapySession;
@@ -96,7 +95,7 @@ class PaymentController extends Controller
             $therapistRate = (float) ($session->session_rate ?? 0);
 
             // Derive platform fee server-side — client cannot override this.
-            $platformFee = $this->derivePlatformFee($user);
+            $platformFee = $this->derivePlatformFee($user, $currency);
 
             // Apply VAT server-side from Financial Settings (group=financial, key=vat_rate).
             // VAT is calculated on (therapist rate + platform fee). 0 = VAT-exempt.
@@ -572,17 +571,36 @@ class PaymentController extends Controller
                 ->where('user_id', $user->id)
                 ->firstOrFail();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Payment verified',
-                'data' => [
-                    'payment_id' => $payment->id,
-                    'status' => $payment->status,
-                    'is_paid' => in_array($payment->status, ['completed', 'paid']),
-                    'amount' => $payment->amount,
-                    'currency' => $payment->currency,
-                ],
-            ]);
+            $responseData = [
+                'payment_id'   => $payment->id,
+                'status'       => $payment->status,
+                'is_paid'      => in_array($payment->status, ['completed', 'paid']),
+                'amount'       => $payment->amount,
+                'currency'     => $payment->currency,
+                'payment_type' => $payment->payment_type,
+                'reference'    => $payment->payment_reference,
+                'paid_at'      => $payment->completed_at?->toIso8601String() ?? $payment->paid_at?->toIso8601String(),
+            ];
+
+            // Attach session details for session_booking payments
+            if ($payment->payment_type === 'session_booking' && $payment->session_id) {
+                $session = TherapySession::with(['therapist.user'])->find($payment->session_id);
+                if ($session) {
+                    $therapist = $session->therapist;
+                    $responseData['session'] = [
+                        'uuid'           => $session->uuid,
+                        'scheduled_at'   => $session->scheduled_at?->toIso8601String(),
+                        'duration_minutes' => $session->duration_minutes ?? 60,
+                        'session_type'   => $session->session_type,
+                        'therapist_name' => $therapist
+                            ? 'Dr. '.($therapist->user->first_name ?? '').' '.($therapist->user->last_name ?? '')
+                            : null,
+                        'therapist_uuid' => $therapist?->uuid,
+                    ];
+                }
+            }
+
+            return response()->json(['success' => true, 'message' => 'Payment verified', 'data' => $responseData]);
         } catch (Exception $e) {
             return response()->json(['success' => false, 'message' => 'Payment not found.'], 404);
         }
@@ -843,57 +861,13 @@ class PaymentController extends Controller
     // ─── Private helpers ──────────────────────────────────────────────────────
 
     /**
-     * Derive the platform booking fee for a user based on their ACTIVE subscription plan.
-     *
-     * Fee-exempt plan slugs: premium, recovery.
-     * All other plans (basic, freemium / no subscription) pay the config-driven fee.
-     *
-     * Reads config from Setting model first, then PLATFORM_BOOKING_FEE_NGN env, then 3000.
+     * Derive the platform booking fee for a user.
+     * Delegates to BookingFeeService — the single source of truth for fee config.
+     * This ensures checkout preview and actual charge always use the same value.
      */
-    private function derivePlatformFee(object $user): float
+    private function derivePlatformFee(object $user, string $currency = 'NGN'): float
     {
-        $exemptPlanSlugs = ['premium', 'recovery'];
-        $activePlanSlug = null;
-
-        try {
-            $paySub = PaymentSubscription::where('user_id', $user->id)
-                ->active()
-                ->with('plan')
-                ->latest()
-                ->first();
-            if ($paySub && $paySub->plan) {
-                $activePlanSlug = $paySub->plan->slug;
-            }
-        } catch (\Throwable) {
-        }
-
-        if (! $activePlanSlug) {
-            try {
-                $legacySub = LegacySubscription::where('user_id', $user->id)
-                    ->where('status', 'active')
-                    ->where('current_period_end', '>=', now())
-                    ->with('plan')
-                    ->latest('current_period_end')
-                    ->first();
-                if ($legacySub && $legacySub->plan) {
-                    $activePlanSlug = $legacySub->plan->slug;
-                }
-            } catch (\Throwable) {
-            }
-        }
-
-        // Fast path: user's cached subscription_plan field
-        if (! $activePlanSlug && ! empty($user->subscription_plan)) {
-            $activePlanSlug = $user->subscription_plan;
-        }
-
-        if ($activePlanSlug && in_array($activePlanSlug, $exemptPlanSlugs)) {
-            return 0.0;
-        }
-
-        return (float) (
-            Setting::where('key', 'platform_booking_fee_ngn')->value('value')
-            ?? env('PLATFORM_BOOKING_FEE_NGN', 3000)
-        );
+        /** @var \App\Models\User $user */
+        return app(\App\Services\BookingFeeService::class)->calculate($user, $currency)['fee'];
     }
 }

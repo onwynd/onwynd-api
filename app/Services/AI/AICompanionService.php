@@ -213,7 +213,10 @@ Celebrate their wins. Make them feel seen and appreciated.
 Keep responses concise (2–4 sentences unless detail is needed), actionable, and encouraging.
 
 IDENTITY:
-You are the Onwynd AI Companion — a supportive, private mental-health assistant built for Nigerians and Africans. You listen deeply and offer evidence-based suggestions. You are not a replacement for a licensed therapist. If asked whether you are human, be honest: you are an AI. Do not claim to read files unless they are uploaded for analysis.
+You are the Onwynd AI Companion — a supportive, private mental-health assistant built for Nigerians and Africans. You listen deeply and offer evidence-based suggestions. You are not a replacement for a licensed therapist. If asked whether you are human, be honest: you are an AI.
+
+DOCUMENT ANALYSIS:
+When a user shares a document or file, its content is extracted and provided to you inside [Document: filename] or [Image/Screenshot: filename] tags in the user's message. You HAVE received this content — read it carefully and respond intelligently. For medical reports, lab results, prescriptions, school reports, or official documents: extract the key data points, explain what they mean in plain language, flag anything that needs attention, and offer compassionate guidance. If the extracted text says the PDF is image-based and could not be extracted, acknowledge this warmly and ask the user to share the key figures (e.g. "Can you type out the test results or the values you'd like me to help you understand?"). Never say you cannot read files — you have already received the content. Respond like a knowledgeable friend reviewing the document together with the user.
 
 LISTENING FIRST — NON-NEGOTIABLE:
 Before you advise, fix, or suggest anything, listen. Acknowledge what the user shared. Validate their feeling. Ask a gentle clarifying question if needed. Never jump straight to solutions. A response that skips listening feels cold and mechanical — the opposite of healing.
@@ -259,7 +262,8 @@ Detect emotional tone — if you sense anxiety, depression, burnout, low motivat
 
 ONWYND ACTIVITY RECOMMENDATIONS:
 Recommend relevant Onwynd features using markdown links. Format: [Feature Name](/path)
-Available: [Journal](/dashboard/journal), [Mood Check-in](/dashboard/mood), [Breathing Exercise](/unwind), [Mini Meditation](/unwind), [Unwind Hub](/unwind), [Gratitude Journal](/dashboard/journal), [Sleep Tracker](/dashboard/sleep), [Exercise Library](/exercise), [Assessments](/assessments).
+Available: [Journal](/dashboard/journal), [Mood Check-in](/dashboard/mood), [Breathing Exercise](/unwind), [Mini Meditation](/unwind), [Unwind Hub](/unwind), [Gratitude Journal](/dashboard/journal), [Sleep Tracker](/dashboard/sleep), [Exercise Library](/exercise), [Assessments](/assessments), [Group Sessions](/sessions/group), [Couples Therapy](/sessions/group?type=couples), [Family Session](/sessions/group?type=family), [Friends Session](/sessions/group?type=friends).
+When the user mentions relationship struggles, partner conflicts, family tension, wanting to heal with loved ones, or feeling isolated and wanting shared support, recommend the relevant group session type. Example: "Our [Couples Therapy](/sessions/group?type=couples) sessions let you and your partner work through this together with a licensed therapist."
 Recommend naturally: "Try our [Breathing Exercise](/unwind) — it really helps in moments like this."
 
 THERAPIST RECOMMENDATIONS:
@@ -581,13 +585,36 @@ SYSTEM;
                 ->orderBy('id', 'desc')
                 ->get(['message', 'sender', 'created_at']);
 
-            $last = $messages->first();
+            $lastMsg  = $messages->first();  // most recent (desc order)
+            $firstMsg = $messages->last();   // oldest = first sent
+
+            // Title: first user message gives the best topic context
+            $firstUserMsg = $messages->where('sender', 'user')->last();
+            $rawTitle = $firstUserMsg ? $firstUserMsg->message : ($lastMsg ? $lastMsg->message : null);
+            // Strip document extraction prefixes like "[Document: report.pdf]\n..."
+            if ($rawTitle) {
+                $rawTitle = preg_replace('/^\[(Document|Image\/Screenshot):[^\]]+\]\s*/i', '', $rawTitle);
+                $rawTitle = preg_replace('/^Please review the following document.*?\n\n/is', '', $rawTitle);
+                $rawTitle = trim($rawTitle) ?: ($firstUserMsg ? $firstUserMsg->message : null);
+            }
+            $title = $rawTitle
+                ? (mb_strlen($rawTitle) > 55 ? mb_substr($rawTitle, 0, 52).'...' : $rawTitle)
+                : 'Conversation';
+
+            // Last message preview for excerpt
+            $lastUserOrAi = $lastMsg;
+            $lastMsgPreview = $lastUserOrAi
+                ? (mb_strlen($lastUserOrAi->message) > 80 ? mb_substr($lastUserOrAi->message, 0, 77).'...' : $lastUserOrAi->message)
+                : null;
+
             $result[] = [
                 'id' => $sid,
                 'conversation_id' => $sid,
-                'title' => $last ? (strlen($last->message) > 50 ? substr($last->message, 0, 47).'...' : $last->message) : 'Conversation',
-                'started_at' => optional($messages->last())->created_at,
-                'ended_at' => optional($last)->created_at,
+                'title' => $title,
+                'last_message' => $lastMsgPreview,
+                'started_at' => optional($firstMsg)->created_at,
+                'updated_at' => optional($lastMsg)->created_at,
+                'ended_at' => optional($lastMsg)->created_at,
                 'total_messages' => $messages->count(),
             ];
         }

@@ -218,7 +218,8 @@ class WebhookController extends Controller
             }
 
             // Handle regular therapy session payments
-            \Illuminate\Support\Facades\DB::transaction(function () use ($payment, $txData) {
+            $bookedSession = null;
+            \Illuminate\Support\Facades\DB::transaction(function () use ($payment, $txData, &$bookedSession) {
                 // Step A: Update the Payment record
                 $payment->status = 'completed';
                 $payment->payment_status = 'paid';
@@ -231,7 +232,9 @@ class WebhookController extends Controller
                     $session = \App\Models\TherapySession::find($payment->session_id);
                     if ($session) {
                         $session->payment_status = 'paid';
+                        $session->status = 'booked';
                         $session->save();
+                        $bookedSession = $session;
                     }
                 }
 
@@ -241,7 +244,6 @@ class WebhookController extends Controller
                     if ($orgMember) {
                         $orgMember->increment('sessions_used_this_month');
 
-                        // Increment aggregate organization pool if contract exists
                         $contract = \App\Models\InstitutionalContract::where('institution_user_id', $orgMember->organization->institution_user_id)
                             ->where('status', 'active')
                             ->first();
@@ -258,6 +260,63 @@ class WebhookController extends Controller
                 'session_id' => $payment->session_id,
                 'reference' => $reference,
             ]);
+
+            // Send confirmation email to patient and notify admin
+            if ($bookedSession) {
+                $patient = User::find($payment->user_id);
+                $therapist = \App\Models\Therapist::with('user')->find($bookedSession->therapist_id);
+                $therapistName = $therapist
+                    ? 'Dr. '.($therapist->user->first_name ?? '').' '.($therapist->user->last_name ?? '')
+                    : 'Your therapist';
+                $dateTime = $bookedSession->scheduled_at
+                    ? \Carbon\Carbon::parse($bookedSession->scheduled_at)->format('D, d M Y \a\t g:i A')
+                    : 'TBD';
+                $sessionLink = rtrim(config('app.frontend_url', env('FRONTEND_URL', 'https://app.onwynd.com')), '/').'/dashboard';
+
+                if ($patient?->email) {
+                    try {
+                        \Illuminate\Support\Facades\Mail::to($patient->email)->queue(
+                            new \App\Mail\AppointmentBookingConfirmation(
+                                $patient->first_name ?? $patient->name ?? 'there',
+                                $therapistName,
+                                $dateTime,
+                                $sessionLink,
+                            )
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning('Failed to queue booking confirmation email', ['error' => $e->getMessage()]);
+                    }
+                }
+
+                // Notify admin
+                try {
+                    $adminEmail = config('mail.admin_address', env('ADMIN_EMAIL', 'admin@onwynd.com'));
+                    \Illuminate\Support\Facades\Mail::to($adminEmail)->queue(
+                        new \App\Mail\AdminSessionBookingNotification(
+                            $patient,
+                            $therapistName,
+                            $dateTime,
+                            $payment->amount,
+                            $payment->currency ?? 'NGN',
+                        )
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to queue admin session booking notification', ['error' => $e->getMessage()]);
+                }
+
+                // In-app notification for patient
+                try {
+                    \App\Models\Notification::create([
+                        'user_id' => $payment->user_id,
+                        'type'    => 'booking',
+                        'title'   => 'Session Confirmed',
+                        'message' => "Your session with {$therapistName} on {$dateTime} is confirmed.",
+                        'action_url' => '/dashboard',
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to create booking confirmation notification', ['error' => $e->getMessage()]);
+                }
+            }
 
         } catch (\Throwable $e) {
             Log::error('Failed to process charge.success', ['message' => $e->getMessage(), 'reference' => $reference]);

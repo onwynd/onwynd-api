@@ -58,6 +58,17 @@ class Payment extends Model
 
     protected $appends = ['is_paid', 'status_display'];
 
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
     /**
      * Relations
      */

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\V1\Therapist;
 
 use App\Http\Controllers\Controller;
+use App\Http\DTOs\TherapistDTO;
 use App\Http\Requests\Therapist\UpdateAvailabilityRequest;
 use App\Http\Requests\Therapist\UpdateBankDetailsRequest;
 use App\Http\Requests\Therapist\UpdateProfileRequest;
@@ -45,56 +46,10 @@ class TherapistProfileController extends Controller
 
             Log::info('Therapist: Get profile', ['therapist_id' => $therapist->id]);
 
-            $stats = $this->stats($therapist);
-
-            // Load TherapistProfile for admin verification data (rejection_reason, verified_at, etc.) and terms
-            $verificationProfile = $user->therapistProfile;
-
             return response()->json([
                 'success' => true,
                 'message' => 'Profile retrieved',
-                'data' => [
-                    'id' => $therapist->id,
-                    'full_name' => $therapist->full_name,
-                    'email' => $therapist->user->email,
-                    'phone' => $therapist->phone,
-                    'bio' => $therapist->bio,
-                    'specialization' => $therapist->specialization,
-                    'qualification' => $therapist->qualification,
-                    'years_of_experience' => $therapist->years_of_experience,
-                    'license_number' => $therapist->license_number,
-                    'is_verified' => $therapist->is_verified,
-                    'verification_date' => $therapist->verification_date,
-                    'hourly_rate' => $therapist->hourly_rate,
-                    'currency' => $therapist->payout_currency ?? 'NGN',
-                    'introductory_rate' => $therapist->introductory_rate,
-                    'introductory_sessions_count' => $therapist->introductory_sessions_count,
-                    'introductory_rate_active' => (bool) $therapist->introductory_rate_active,
-                    'status' => $therapist->status,
-                    'avatar_url' => $therapist->avatar_url,
-                    'certificate_url' => $therapist->certificate_url,
-                    'languages' => json_decode($therapist->languages) ?? [],
-                    'areas_of_focus' => json_decode($therapist->areas_of_focus) ?? [],
-                    'stats' => $stats,
-                    'bank_details' => $therapist->account_number ? [
-                        'account_name' => $therapist->account_name,
-                        'account_number' => $therapist->account_number, // Return full number so they can see it (or maybe masked is better but for editing we need full usually? actually masked is fine for display but for form pre-fill it might be issue if they save it back)
-                        'bank_code' => $therapist->bank_code,
-                        'bank_name' => $therapist->bank_name,
-                        'is_verified' => (bool) $therapist->recipient_code,
-                    ] : null,
-                    // Admin verification status (from TherapistProfile)
-                    'verification' => $verificationProfile ? [
-                        'status' => $verificationProfile->status,
-                        'is_verified' => $verificationProfile->is_verified,
-                        'rejection_reason' => $verificationProfile->rejection_reason,
-                        'rejected_at' => $verificationProfile->rejected_at,
-                        'verified_at' => $verificationProfile->verified_at,
-                        'has_certificate' => (bool) $verificationProfile->certificate_url,
-                    ] : null,
-                    'terms_accepted_at' => $verificationProfile?->terms_accepted_at,
-                    'created_at' => $therapist->created_at,
-                ],
+                'data' => TherapistDTO::fromModel($therapist),
             ]);
         } catch (Exception $e) {
             Log::error('Therapist: Get profile failed', [

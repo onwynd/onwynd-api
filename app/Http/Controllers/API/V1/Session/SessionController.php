@@ -183,6 +183,7 @@ class SessionController extends Controller
                 $isCorporateCovered = false;
                 $amountCovered = 0;
                 $amountChargedToUser = 0;
+                $corporateCoveredDuration = null;
 
                 if (! $isAnonymous && $user) {
                     $organizationMembership = OrganizationMember::with('organization')
@@ -197,22 +198,54 @@ class SessionController extends Controller
                         if ($org->status === 'active' &&
                             $organizationMembership->sessions_used_this_month < $organizationMembership->sessions_limit) {
 
+                            $requestedDuration = (int) ($request->duration_minutes ?? 60);
+                            $corporateCoveredDuration = (int) ($organizationMembership->session_duration_minutes ?? 0) ?: null;
+
                             // Get session ceiling from organization member or default
                             $sessionCeiling = $organizationMembership->session_ceiling_ngn ?? 15000;
 
                             // Calculate session fee
-                            $sessionFee = ($therapist->hourly_rate / 60) * ($request->duration_minutes ?? 60);
-
-                            if ($sessionFee <= $sessionCeiling) {
-                                // Full coverage
-                                $isCorporateCovered = true;
-                                $amountCovered = $sessionFee;
-                                $amountChargedToUser = 0;
+                            if ($requestedDuration === 35 && ! empty($therapist->has_35min_slot) && ! empty($therapist->rate_35min)) {
+                                $sessionFee = (float) $therapist->rate_35min;
                             } else {
-                                // Partial coverage - user pays difference
-                                $isCorporateCovered = true;
-                                $amountCovered = $sessionCeiling;
-                                $amountChargedToUser = $sessionFee - $sessionCeiling;
+                                $sessionFee = ($therapist->hourly_rate / 60) * $requestedDuration;
+                            }
+
+                            // Corporate plans may restrict covered sessions to a specific duration (e.g. Growth = 35 mins).
+                            // If so, only apply coverage when the requested duration matches that rule.
+                            if ($corporateCoveredDuration === 35) {
+                                if ($requestedDuration !== 35) {
+                                    // Not eligible for corporate coverage; allow normal paid booking.
+                                    $isCorporateCovered = false;
+                                } else {
+                                    if (empty($therapist->has_35min_slot)) {
+                                        throw new Exception("This therapist does not offer 35-minute corporate sessions.");
+                                    }
+                                    if ($sessionFee <= $sessionCeiling) {
+                                        // Full coverage
+                                        $isCorporateCovered = true;
+                                        $amountCovered = $sessionFee;
+                                        $amountChargedToUser = 0;
+                                    } else {
+                                        // Partial coverage - user pays difference
+                                        $isCorporateCovered = true;
+                                        $amountCovered = $sessionCeiling;
+                                        $amountChargedToUser = $sessionFee - $sessionCeiling;
+                                    }
+                                }
+                            } else {
+                                // Legacy / enterprise / custom: apply coverage to the requested duration.
+                                if ($sessionFee <= $sessionCeiling) {
+                                    // Full coverage
+                                    $isCorporateCovered = true;
+                                    $amountCovered = $sessionFee;
+                                    $amountChargedToUser = 0;
+                                } else {
+                                    // Partial coverage - user pays difference
+                                    $isCorporateCovered = true;
+                                    $amountCovered = $sessionCeiling;
+                                    $amountChargedToUser = $sessionFee - $sessionCeiling;
+                                }
                             }
                         }
                     }
@@ -231,6 +264,7 @@ class SessionController extends Controller
                     'date' => $request->session_date ?? $request->scheduled_at,
                     'time' => $request->session_time ?? null,
                     'is_corporate_covered' => $isCorporateCovered,
+                    'corporate_covered_duration' => $corporateCoveredDuration,
                     'amount_covered' => $amountCovered,
                     'amount_charged_to_user' => $amountChargedToUser,
                 ]);
@@ -333,29 +367,70 @@ class SessionController extends Controller
                 if (class_exists(\App\Models\TherapistAvailability::class)) {
                     $day = (int) $scheduledAt->format('w');
                     $dateStr = $scheduledAt->format('Y-m-d');
-                    $timeStr = $scheduledAt->format('H:i');
+                    $sessionEnd = $scheduledAt->copy()->addMinutes($sessionDuration);
+
                     $availabilities = \App\Models\TherapistAvailability::where('therapist_id', $therapist->user_id)
+                        ->where('is_available', true)
                         ->where(function ($q) use ($day, $dateStr) {
-                            $q->where('is_recurring', true)->where('day_of_week', $day)
-                                ->orWhere(function ($q2) use ($dateStr) {
-                                    $q2->where('specific_date', $dateStr);
-                                });
+                            $q->where(function ($r) use ($day) {
+                                $r->where('is_recurring', true)->where('day_of_week', $day);
+                            })->orWhere(function ($s) use ($dateStr) {
+                                $s->where('is_recurring', false)
+                                    ->whereDate('specific_date', $dateStr);
+                            });
                         })
+                        ->orderBy('start_time')
                         ->get();
-                    $isAvailable = $availabilities->isEmpty() ? true : $availabilities->contains(function ($slot) use ($timeStr) {
-                        return $timeStr >= $slot->start_time && $timeStr < $slot->end_time;
-                    });
+
+                    if ($availabilities->isEmpty()) {
+                        // No rules on file for this therapist/date — allow (legacy / migration gaps).
+                        $isAvailable = true;
+                    } else {
+                        $isAvailable = $availabilities->contains(function ($slot) use ($scheduledAt, $sessionEnd, $dateStr) {
+                            $winStart = Carbon::parse($dateStr.' '.(string) $slot->start_time);
+                            $winEnd = Carbon::parse($dateStr.' '.(string) $slot->end_time);
+
+                            return $scheduledAt->greaterThanOrEqualTo($winStart)
+                                && $sessionEnd->lessThanOrEqualTo($winEnd);
+                        });
+                    }
                 }
                 if (! $isAvailable) {
                     throw new Exception('Selected time slot is not available');
                 }
 
-                // E2: Overlap-aware double-booking prevention (FIX 11)
-                // Check: existing_start < requested_end AND existing_end > requested_start
+                // Release expired payment holds: pending_confirmation sessions whose
+                // payment was never completed within the 10-minute hold window are
+                // cancelled so the slot becomes available to other patients.
+                \App\Models\TherapySession::where('therapist_id', $therapist->user_id)
+                    ->where('status', 'pending_confirmation')
+                    ->where('payment_status', 'pending')
+                    ->where('created_at', '<', now()->subMinutes(10))
+                    ->update([
+                        'status' => 'cancelled',
+                        'cancellation_reason' => 'Payment hold expired — slot released automatically.',
+                    ]);
+
+                // E2: Overlap-aware double-booking prevention.
+                // pending_confirmation sessions only block if created within the last 10 minutes
+                // (payment hold window). Older unpaid holds were released above.
                 $requestedEnd = $scheduledAt->copy()->addMinutes($sessionDuration);
 
                 $conflictingSession = \App\Models\TherapySession::where('therapist_id', $therapist->user_id)
-                    ->whereIn('status', ['booked', 'pending_confirmation', 'in_progress', 'scheduled'])
+                    ->where(function ($q) {
+                        $q->whereIn('status', ['booked', 'in_progress', 'scheduled'])
+                          ->orWhere(function ($r) {
+                              // Active payment holds (within 10-min window)
+                              $r->where('status', 'pending_confirmation')
+                                ->where('payment_status', 'pending')
+                                ->where('created_at', '>=', now()->subMinutes(10));
+                          })
+                          ->orWhere(function ($r) {
+                              // Corporate/free sessions confirmed without payment hold
+                              $r->where('status', 'pending_confirmation')
+                                ->whereIn('payment_status', ['covered', 'free', 'paid']);
+                          });
+                    })
                     ->where('scheduled_at', '<', $requestedEnd)
                     ->whereRaw('DATE_ADD(scheduled_at, INTERVAL COALESCE(duration_minutes, 60) MINUTE) > ?', [$scheduledAt])
                     ->lockForUpdate()
@@ -364,7 +439,6 @@ class SessionController extends Controller
                 if ($conflictingSession) {
                     $conflictEnd = $conflictingSession->scheduled_at->copy()
                         ->addMinutes($conflictingSession->duration_minutes ?? 60);
-                    // Suggest the next open slot immediately after the conflicting session ends
                     $nextSlot = $conflictEnd->copy()->ceilMinutes(30)->toDateTimeString();
                     throw new \App\Exceptions\BookingConflictException(
                         'This time slot overlaps with an existing booking. Next available slot: ' . $nextSlot,

@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -39,6 +38,8 @@ class DatabaseSeeder extends Seeder
             NigerianInstitutionSeeder::class,
             CorporateDemoSeeder::class,
             VapidSettingsSeeder::class,
+            // Real USA users — must run last so AUTO_INCREMENT = 62 lands correctly
+            UsaPatientSeeder::class,
         ]);
     }
 }

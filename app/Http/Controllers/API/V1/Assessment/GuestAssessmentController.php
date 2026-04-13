@@ -15,6 +15,9 @@ use Illuminate\Support\Str;
 
 class GuestAssessmentController extends Controller
 {
+    private const PENDING_ASSESSMENT_COOKIE = 'onwynd_pending_assessment';
+    private const PENDING_ASSESSMENT_TTL_MINUTES = 15;
+
     /**
      * POST /api/v1/assessments/guest/submit
      *
@@ -62,7 +65,17 @@ class GuestAssessmentController extends Controller
                         'result' => $guestResult,
                         'guest_token' => $guestToken,
                     ],
-                ]);
+                ])->cookie(
+                    self::PENDING_ASSESSMENT_COOKIE,
+                    $guestToken,
+                    self::PENDING_ASSESSMENT_TTL_MINUTES,
+                    '/',
+                    null,
+                    app()->environment('production'),
+                    true,
+                    false,
+                    'Lax'
+                );
 
             } catch (Exception $e) {
                 Log::error('GuestAssessment: submit failed', [
@@ -127,6 +140,156 @@ class GuestAssessmentController extends Controller
                     'message' => 'Failed to link assessment',
                 ], 500);
             }
+        });
+    }
+
+    /**
+     * GET /api/v1/patient/assessments/guest/pending
+     *
+     * Check whether there is a recent, unlinked guest assessment in the HttpOnly cookie.
+     * Used to prompt the user (after sign-in) whether they'd like to save it to their account.
+     */
+    public function pending(Request $request): JsonResponse
+    {
+        $guestToken = $request->cookie(self::PENDING_ASSESSMENT_COOKIE);
+        if (! $guestToken) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'has_pending' => false,
+                ],
+            ]);
+        }
+
+        $guestResult = GuestAssessmentResult::where('guest_token', $guestToken)
+            ->whereNull('linked_user_id')
+            ->first();
+
+        if (! $guestResult) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'has_pending' => false,
+                ],
+            ])->withoutCookie(self::PENDING_ASSESSMENT_COOKIE);
+        }
+
+        $completedAt = $guestResult->completed_at ?? $guestResult->created_at;
+        if ($completedAt && $completedAt->lt(now()->subMinutes(self::PENDING_ASSESSMENT_TTL_MINUTES))) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'has_pending' => false,
+                    'expired' => true,
+                ],
+            ])->withoutCookie(self::PENDING_ASSESSMENT_COOKIE);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'has_pending' => true,
+                'result' => $guestResult,
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/assessments/guest/pending
+     *
+     * Public version of pending() for unauthenticated users so results can be restored
+     * after refresh within the TTL window. Reads from the HttpOnly cookie.
+     */
+    public function pendingPublic(Request $request): JsonResponse
+    {
+        $guestToken = $request->cookie(self::PENDING_ASSESSMENT_COOKIE);
+        if (! $guestToken) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'has_pending' => false,
+                ],
+            ]);
+        }
+
+        $guestResult = GuestAssessmentResult::where('guest_token', $guestToken)
+            ->whereNull('linked_user_id')
+            ->first();
+
+        if (! $guestResult) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'has_pending' => false,
+                ],
+            ])->withoutCookie(self::PENDING_ASSESSMENT_COOKIE);
+        }
+
+        $completedAt = $guestResult->completed_at ?? $guestResult->created_at;
+        if ($completedAt && $completedAt->lt(now()->subMinutes(self::PENDING_ASSESSMENT_TTL_MINUTES))) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'has_pending' => false,
+                    'expired' => true,
+                ],
+            ])->withoutCookie(self::PENDING_ASSESSMENT_COOKIE);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'has_pending' => true,
+                'result' => $guestResult,
+            ],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/patient/assessments/guest/attach
+     *
+     * Attach the pending guest assessment (from HttpOnly cookie) to the authenticated user.
+     * Clears the cookie on success.
+     */
+    public function attach(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $guestToken = $request->cookie(self::PENDING_ASSESSMENT_COOKIE);
+
+        if (! $guestToken) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No pending assessment found',
+            ], 404);
+        }
+
+        return DB::transaction(function () use ($user, $guestToken) {
+            $guestResult = GuestAssessmentResult::where('guest_token', $guestToken)
+                ->whereNull('linked_user_id')
+                ->first();
+
+            if (! $guestResult) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or already linked pending assessment',
+                ], 404)->withoutCookie(self::PENDING_ASSESSMENT_COOKIE);
+            }
+
+            $completedAt = $guestResult->completed_at ?? $guestResult->created_at;
+            if ($completedAt && $completedAt->lt(now()->subMinutes(self::PENDING_ASSESSMENT_TTL_MINUTES))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pending assessment expired',
+                ], 410)->withoutCookie(self::PENDING_ASSESSMENT_COOKIE);
+            }
+
+            $userResult = $guestResult->linkToUser($user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Assessment saved to your account',
+                'data' => $userResult,
+            ])->withoutCookie(self::PENDING_ASSESSMENT_COOKIE);
         });
     }
 

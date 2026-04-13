@@ -218,9 +218,15 @@ class AuthController extends BaseController
             'token' => $token,
         ];
 
-        return $this->sendResponse($result, 'User registered successfully.', 201)->cookie(
+        $response = $this->sendResponse($result, 'User registered successfully.', 201)->cookie(
             $this->makeAuthCookie($request, $token),
         );
+
+        foreach ($this->makeRoleCookies($request, $user) as $cookie) {
+            $response->cookie($cookie);
+        }
+
+        return $response;
     }
 
     /**
@@ -279,11 +285,42 @@ class AuthController extends BaseController
 
         $user = $this->userRepository->findByEmail($request->email);
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! $user) {
+            return $this->sendError('Invalid credentials.', [], 401);
+        }
+
+        if (! Hash::check($request->password, $user->password)) {
+            // Firebase-registered users have a random API password hash — direct login won't
+            // work until they set one via the forgot-password flow.
+            if ($user->firebase_uid) {
+                $provider = $user->auth_provider ?? 'unknown';
+
+                if (in_array($provider, ['google', 'phone', 'anonymous'], true)) {
+                    return $this->sendError(
+                        'This account uses social sign-in. Google/phone login is temporarily unavailable — please check back soon.',
+                        ['code' => 'social_login_unavailable'],
+                        401
+                    );
+                }
+
+                // Firebase email/password user — their API password is a random placeholder.
+                // They must use forgot-password to establish a direct login password.
+                return $this->sendError(
+                    'Direct login is not set up for this account. Use "Forgot Password" to create a login password.',
+                    ['code' => 'set_password_required'],
+                    401
+                );
+            }
+
             return $this->sendError('Invalid credentials.', [], 401);
         }
 
         $user->load('role');
+
+        // Auto-verify email on successful password login — user proved they own the address
+        if (is_null($user->email_verified_at)) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
 
         $token = $user->createToken($this->deviceTokenName($request->userAgent() ?? ''))->plainTextToken;
 
@@ -314,9 +351,15 @@ class AuthController extends BaseController
             $responseData['location_alert'] = $locationAlert;
         }
 
-        return $this->sendResponse($responseData, 'User logged in successfully.')->cookie(
+        $response = $this->sendResponse($responseData, 'User logged in successfully.')->cookie(
             $this->makeAuthCookie($request, $token),
         );
+
+        foreach ($this->makeRoleCookies($request, $user) as $cookie) {
+            $response->cookie($cookie);
+        }
+
+        return $response;
     }
 
     public function logout(Request $request)
@@ -353,12 +396,18 @@ class AuthController extends BaseController
 
         $token = $user->createToken($this->deviceTokenName($request->userAgent() ?? ''))->plainTextToken;
 
-        return $this->sendResponse([
+        $response = $this->sendResponse([
             'user' => $user->load('role'),
             'token' => $token,
         ], 'Session refreshed successfully.')->cookie(
             $this->makeAuthCookie($request, $token),
         );
+
+        foreach ($this->makeRoleCookies($request, $user) as $cookie) {
+            $response->cookie($cookie);
+        }
+
+        return $response;
     }
 
     public function exchangeToken(Request $request)

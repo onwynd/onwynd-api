@@ -169,12 +169,18 @@ class FirebaseAuthController extends BaseController
 
             $token = $user->createToken($this->deviceTokenName($request->userAgent() ?? ''))->plainTextToken;
 
-            return $this->sendResponse([
+            $response = $this->sendResponse([
                 'user' => $user,
                 'token' => $token,
             ], 'Authenticated via Firebase successfully.')->cookie(
                 $this->makeAuthCookie($request, $token),
             );
+
+            foreach ($this->makeRoleCookies($request, $user) as $cookie) {
+                $response->cookie($cookie);
+            }
+
+            return $response;
 
         } catch (\Exception $e) {
             Log::error('Firebase authentication failed', [
@@ -230,11 +236,17 @@ class FirebaseAuthController extends BaseController
 
         Log::info('2FA challenge passed', ['user_id' => $user->id]);
 
-        return $this->sendResponse([
+        $response = $this->sendResponse([
             'user'  => $user,
             'token' => $token,
         ], 'Authenticated successfully.')->cookie(
             $this->makeAuthCookie($request, $token),
         );
+
+        foreach ($this->makeRoleCookies($request, $user) as $cookie) {
+            $response->cookie($cookie);
+        }
+
+        return $response;
     }
 }
