@@ -21,10 +21,11 @@ class TherapyEloquentRepository extends BaseRepository implements TherapyReposit
 
     public function findUpcomingSessions(string $userId, int $limit = 5): mixed
     {
-        return $this->model->where(function ($query) use ($userId) {
-            $query->where('patient_id', $userId)
-                ->orWhere('therapist_id', $userId);
-        })
+        return $this->model->with(['therapist.user', 'patient'])
+            ->where(function ($query) use ($userId) {
+                $query->where('patient_id', $userId)
+                    ->orWhere('therapist_id', $userId);
+            })
             ->where('scheduled_at', '>=', now())
             ->where('status', 'scheduled')
             ->orderBy('scheduled_at', 'asc')
@@ -34,10 +35,11 @@ class TherapyEloquentRepository extends BaseRepository implements TherapyReposit
 
     public function getSessionHistory(string $userId, ?int $limit = null): mixed
     {
-        $query = $this->model->where(function ($query) use ($userId) {
-            $query->where('patient_id', $userId)
-                ->orWhere('therapist_id', $userId);
-        })
+        $query = $this->model->with(['therapist.user', 'patient'])
+            ->where(function ($query) use ($userId) {
+                $query->where('patient_id', $userId)
+                    ->orWhere('therapist_id', $userId);
+            })
             ->where('status', 'completed')
             ->orderBy('scheduled_at', 'desc');
 
@@ -207,16 +209,22 @@ class TherapyEloquentRepository extends BaseRepository implements TherapyReposit
     public function getPatientStats(int $patientId): array
     {
         $now = now();
-        $sevenDaysAgo = $now->copy()->subDays(7);
 
-        // Mood streak: count consecutive days with a mood log up to today
+        // Fetch distinct mood log dates for the past year in one query, then count streak in PHP
+        $logDates = \App\Models\MoodLog::where('user_id', $patientId)
+            ->where('created_at', '>=', $now->copy()->subDays(365)->startOfDay())
+            ->selectRaw('DATE(created_at) as log_date')
+            ->groupBy('log_date')
+            ->orderByDesc('log_date')
+            ->pluck('log_date')
+            ->map(fn ($d) => \Carbon\Carbon::parse($d)->toDateString())
+            ->flip() // date => index for O(1) lookup
+            ->all();
+
         $moodStreak = 0;
         $checkDate = $now->copy()->startOfDay();
         for ($i = 0; $i < 365; $i++) {
-            $hasLog = \App\Models\MoodLog::where('user_id', $patientId)
-                ->whereDate('created_at', $checkDate)
-                ->exists();
-            if ($hasLog) {
+            if (isset($logDates[$checkDate->toDateString()])) {
                 $moodStreak++;
                 $checkDate->subDay();
             } else {
