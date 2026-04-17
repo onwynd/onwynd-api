@@ -235,13 +235,13 @@ Route::prefix('v1')->group(function () {
     });
 
     // Public therapist discovery (used by /therapist-booking public page)
-    Route::get('therapists/specializations', [\App\Http\Controllers\API\V1\Patient\TherapistController::class, 'specializations']);
-    Route::get('therapists/languages', [\App\Http\Controllers\API\V1\Patient\TherapistController::class, 'languages']);
-    Route::get('therapists/available-now', [\App\Http\Controllers\API\V1\Patient\TherapistController::class, 'availableNow']);
-    Route::get('therapists', [\App\Http\Controllers\API\V1\Patient\TherapistController::class, 'index']);
-    Route::get('therapists/{id}', [\App\Http\Controllers\API\V1\Patient\TherapistController::class, 'show']);
-    Route::get('therapists/{id}/availability', [\App\Http\Controllers\API\V1\Patient\TherapistController::class, 'availability']);
-    Route::get('therapists/{id}/reviews', [\App\Http\Controllers\API\V1\Patient\TherapistController::class, 'reviews']);
+    Route::get('therapists/specializations', [PatientTherapistController::class, 'specializations']);
+    Route::get('therapists/languages', [PatientTherapistController::class, 'languages']);
+    Route::get('therapists/available-now', [PatientTherapistController::class, 'availableNow']);
+    Route::get('therapists', [PatientTherapistController::class, 'index']);
+    Route::get('therapists/{id}', [PatientTherapistController::class, 'show']);
+    Route::get('therapists/{id}/availability', [PatientTherapistController::class, 'availability']);
+    Route::get('therapists/{id}/reviews', [PatientTherapistController::class, 'reviews']);
 
     // Public contact endpoints used by marketing site
     Route::post('contact/submit', [\App\Http\Controllers\API\V1\ContactController::class, 'submit']);
@@ -251,7 +251,7 @@ Route::prefix('v1')->group(function () {
 
     // Public feedback endpoint ? available to all users (guests + any role).
     // The controller already handles Auth::check() for the user_id.
-    Route::post('feedback', [\App\Http\Controllers\API\V1\Patient\HelpController::class, 'feedback']);
+    Route::post('feedback', [PatientHelpController::class, 'feedback']);
 
     // Marketing newsletter routes (public subscribe/confirm/unsubscribe-token)
     Route::prefix('marketing/newsletter')->group(function () {
@@ -406,12 +406,12 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum'])->group(function () {
 
         // Sales Architecture Routes
-        Route::get('leads', [\App\Http\Controllers\API\V1\Sales\LeadController::class, 'index']);
-        Route::patch('leads/{id}/handoff', [\App\Http\Controllers\API\V1\Sales\LeadController::class, 'handoff']);
-        Route::post('leads/{id}/assign-me', [\App\Http\Controllers\API\V1\Sales\LeadController::class, 'assignMe']);
+        Route::get('leads', [SalesLeadController::class, 'index']);
+        Route::patch('leads/{id}/handoff', [SalesLeadController::class, 'handoff']);
+        Route::post('leads/{id}/assign-me', [SalesLeadController::class, 'assignMe']);
         Route::get('institutional/health-overview', [\App\Http\Controllers\API\V1\Institutional\HealthController::class, 'index']);
-        Route::get('sales/stats', [\App\Http\Controllers\API\V1\Sales\DashboardController::class, 'stats']); // Ensure accessible
-        Route::get('sales/agent-performance', [\App\Http\Controllers\API\V1\Sales\DashboardController::class, 'agentPerformance']);
+        Route::get('sales/stats', [SalesDashboardController::class, 'stats']); // Ensure accessible
+        Route::get('sales/agent-performance', [SalesDashboardController::class, 'agentPerformance']);
 
         // Agent location update (sales agents)
         Route::post('map/agent/location', [\App\Http\Controllers\API\V1\MapController::class, 'updateAgentLocation']);
@@ -541,11 +541,11 @@ Route::prefix('v1')->group(function () {
             Route::post('subscribe', [\App\Http\Controllers\API\V1\PushNotificationController::class, 'subscribe']);
             Route::post('unsubscribe', [\App\Http\Controllers\API\V1\PushNotificationController::class, 'unsubscribe']);
             // In-app notification reads (used by NotificationBell for all staff roles)
-            Route::get('/', [\App\Http\Controllers\API\V1\Patient\NotificationController::class, 'index']);
-            Route::get('unread-count', [\App\Http\Controllers\API\V1\Patient\NotificationController::class, 'unreadCount']);
-            Route::patch('read-all', [\App\Http\Controllers\API\V1\Patient\NotificationController::class, 'markAsRead']);
-            Route::patch('{id}/read', [\App\Http\Controllers\API\V1\Patient\NotificationController::class, 'markAsRead']);
-            Route::delete('{id}', [\App\Http\Controllers\API\V1\Patient\NotificationController::class, 'destroy']);
+            Route::get('/', [PatientNotificationController::class, 'index']);
+            Route::get('unread-count', [PatientNotificationController::class, 'unreadCount']);
+            Route::patch('read-all', [PatientNotificationController::class, 'markAsRead']);
+            Route::patch('{id}/read', [PatientNotificationController::class, 'markAsRead']);
+            Route::delete('{id}', [PatientNotificationController::class, 'destroy']);
             // Notification preferences ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â shared across all roles
             Route::get('preferences', [\App\Http\Controllers\API\V1\NotificationPreferencesController::class, 'show']);
             Route::put('preferences', [\App\Http\Controllers\API\V1\NotificationPreferencesController::class, 'update']);
@@ -972,8 +972,8 @@ Route::prefix('v1')->group(function () {
             Route::get('earnings', [TherapistEarningsController::class, 'index']);
             Route::post('earnings/payout', [TherapistEarningsController::class, 'requestPayout']);
             Route::get('earnings/payouts', [TherapistEarningsController::class, 'payouts']);
-            Route::get('earnings-preview', [\App\Http\Controllers\API\V1\Therapist\EarningsController::class, 'preview']);
-            Route::get('earnings/{month}', [\App\Http\Controllers\API\V1\Therapist\EarningsController::class, 'show']);
+            Route::get('earnings-preview', [TherapistEarningsController::class, 'preview']);
+            Route::get('earnings/{month}', [TherapistEarningsController::class, 'show']);
             Route::get('profile', [TherapistProfileController::class, 'show']);
             Route::put('profile', [TherapistProfileController::class, 'update']);
             Route::put('profile/rate', [TherapistProfileController::class, 'updateRate']);
@@ -995,12 +995,12 @@ Route::prefix('v1')->group(function () {
             Route::get('sessions/{uuid}/notes', [\App\Http\Controllers\API\V1\Therapist\TherapistNoteController::class, 'indexBySession']);
 
             // Stats / extra endpoints
-            Route::get('stats', [\App\Http\Controllers\API\V1\Therapist\TherapistProfileController::class, 'stats']);
-            Route::get('financial-flow', [\App\Http\Controllers\API\V1\Therapist\TherapistProfileController::class, 'financialFlow']);
-            Route::get('notes', [\App\Http\Controllers\API\V1\Therapist\TherapistProfileController::class, 'notes']);
-            Route::post('notes', [\App\Http\Controllers\API\V1\Therapist\TherapistProfileController::class, 'storeNote']);
-            Route::put('notes/{id}', [\App\Http\Controllers\API\V1\Therapist\TherapistProfileController::class, 'updateNote']);
-            Route::delete('notes/{id}', [\App\Http\Controllers\API\V1\Therapist\TherapistProfileController::class, 'deleteNote']);
+            Route::get('stats', [TherapistProfileController::class, 'stats']);
+            Route::get('financial-flow', [TherapistProfileController::class, 'financialFlow']);
+            Route::get('notes', [TherapistProfileController::class, 'notes']);
+            Route::post('notes', [TherapistProfileController::class, 'storeNote']);
+            Route::put('notes/{id}', [TherapistProfileController::class, 'updateNote']);
+            Route::delete('notes/{id}', [TherapistProfileController::class, 'deleteNote']);
 
             // Notifications (shared controller, queries by user_id so safe for any role)
             Route::get('notifications/unread-count', [PatientNotificationController::class, 'unreadCount']);
@@ -1045,7 +1045,7 @@ Route::prefix('v1')->group(function () {
             // Staff directory for starting new conversations
             Route::get('staff',  function (\Illuminate\Http\Request $request) {
                 $me     = $request->user();
-                $search = $request->get('search', '');
+                $search = $request->input('search', '');
                 $staff  = \App\Models\User::whereHas('role', fn ($q) => $q->whereNotIn('slug', ['patient', 'user']))
                     ->where('id', '!=', $me->id)
                     ->where('is_active', true)
@@ -1602,9 +1602,9 @@ Route::prefix('v1')->group(function () {
 
         // Admin read-only access to support tickets
         Route::prefix('admin/support')->middleware(['role:admin'])->group(function () {
-            Route::get('tickets', [\App\Http\Controllers\API\V1\Support\TicketController::class, 'index']);
-            Route::get('tickets/{ticket}', [\App\Http\Controllers\API\V1\Support\TicketController::class, 'show']);
-            Route::get('stats', [\App\Http\Controllers\API\V1\Support\DashboardController::class, 'index']);
+            Route::get('tickets', [SupportTicketController::class, 'index']);
+            Route::get('tickets/{ticket}', [SupportTicketController::class, 'show']);
+            Route::get('stats', [SupportDashboardController::class, 'index']);
         });
 
         // Support routes
@@ -1640,7 +1640,7 @@ Route::prefix('v1')->group(function () {
             // Outreach email (send on behalf of the sales rep)
             Route::post('mail/send', [\App\Http\Controllers\API\V1\Sales\OutreachController::class, 'sendEmail']);
             // AI assistant ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â delegates to the same AdminAIChatController used by admin, scoped to sales context
-            Route::post('ai/chat', [\App\Http\Controllers\API\V1\Admin\AdminAIChatController::class, 'chat']);
+            Route::post('ai/chat', [AdminAIChatController::class, 'chat']);
             Route::get('revenue-flow', [SalesDashboardController::class, 'revenueFlow']);
             Route::get('lead-sources', [SalesDashboardController::class, 'leadSources']);
             Route::get('waitlist', [\App\Http\Controllers\API\V1\Sales\WaitlistController::class, 'index']);
@@ -1691,7 +1691,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('marketing')->middleware(['role:marketing|vp_marketing|coo|cgo|ceo|admin|super_admin|founder'])->group(function () {
             Route::get('dashboard', [MarketingDashboardController::class, 'index']);
             Route::get('stats', [MarketingDashboardController::class, 'index']);
-            Route::post('ai/chat', [\App\Http\Controllers\API\V1\Admin\AdminAIChatController::class, 'chat']);
+            Route::post('ai/chat', [AdminAIChatController::class, 'chat']);
             Route::get('chart', [MarketingAnalyticsController::class, 'chart']);
             Route::get('lead-sources', [MarketingDashboardController::class, 'leadSources']);
             Route::get('signup-sources', [MarketingDashboardController::class, 'signupSources']);
@@ -1811,7 +1811,7 @@ Route::prefix('v1')->group(function () {
         Route::post('payments/stripe/verify-session', [StripeController::class, 'verifySession']);
 
         // Subscriptions
-        Route::post('subscriptions/upgrade', [\App\Http\Controllers\API\V1\Payment\SubscriptionController::class, 'upgrade']);
+        Route::post('subscriptions/upgrade', [PaymentSubscriptionController::class, 'upgrade']);
 
         // Chat Routes
         Route::prefix('chat')->group(function () {
@@ -1820,7 +1820,7 @@ Route::prefix('v1')->group(function () {
             Route::post('read', [ChatController::class, 'markAsRead']);
             Route::post('typing', [ChatController::class, 'typing']);
             // Personalized category ordering based on user's conversation history
-            Route::get('categories/personalized', [\App\Http\Controllers\API\V1\Chat\CategoryController::class, 'personalized']);
+            Route::get('categories/personalized', [ChatCategoryController::class, 'personalized']);
         });
 
         // Clinical Advisor Routes
