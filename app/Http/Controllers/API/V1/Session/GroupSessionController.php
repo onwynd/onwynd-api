@@ -60,7 +60,7 @@ class GroupSessionController extends Controller
 
         $request->validate([
             'title'              => 'required|string|max:255',
-            'description'        => 'required|string',
+            'description'        => 'nullable|string',
             'scheduled_at'       => 'required|date|after:now',
             'duration_minutes'   => 'required|integer|min:15',
             'max_participants'   => 'required|integer|min:2',
@@ -77,6 +77,25 @@ class GroupSessionController extends Controller
             'partner_email'      => 'required_if:session_type,couple|email',
             'partner_name'       => 'nullable|string|max:255',
         ]);
+
+        $sessionType = $request->input('session_type');
+        $isOrgSession = in_array($sessionType, ['corporate', 'university'], true) || (bool) $request->input('is_org_covered', false);
+        if ($isOrgSession) {
+            $allowedOrgRoles = ['institutional', 'institution_admin', 'university_admin', 'ngo_admin', 'hr', 'manager', 'student_affairs', 'admin', 'sales'];
+            if (! $user || ! $user->hasRole($allowedOrgRoles)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You do not have permission to create organization-covered sessions.',
+                ], 403);
+            }
+
+            if (! $user->organization_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Organization context is required for organization-covered sessions.',
+                ], 422);
+            }
+        }
 
         // T.2: Corporate/University: Deduct 1 credit from Org pool
         if ($request->is_org_covered || in_array($request->session_type, ['corporate', 'university'])) {
