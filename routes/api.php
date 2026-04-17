@@ -1,6 +1,8 @@
 
 <?php
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\API\V1\Admin\AdminAIChatController;
 use App\Http\Controllers\API\V1\Admin\PromotionalCodeController as AdminPromotionalCodeController;
 use App\Http\Controllers\API\V1\Patient\PromotionalCodeController as PatientPromotionalCodeController;
@@ -206,6 +208,7 @@ Route::prefix('v1')->group(function () {
     });
     // Public routes
     Route::get('config', [ConfigController::class, 'index']);
+    Route::get('config/payment-gateways', [ConfigController::class, 'paymentGateways']);
     Route::get('config/ip-protection', [ConfigController::class, 'ipProtection']);
     Route::post('config/ip-protection/log', [\App\Http\Controllers\API\V1\Admin\IPProtectionController::class, 'logAttempt'])->middleware('throttle:10,1');
     Route::get('system/status', [SystemController::class, 'status']);
@@ -1172,6 +1175,7 @@ Route::prefix('v1')->group(function () {
             Route::get('therapists/{therapist}', [AdminTherapistController::class, 'show']);
             Route::post('therapists/{therapist}/deactivate', [AdminTherapistController::class, 'deactivate']);
             Route::post('therapists/{therapist}/activate', [AdminTherapistController::class, 'activate']);
+            Route::post('therapists/{therapist}/homepage-featured', [AdminTherapistController::class, 'setHomepageFeatured']);
             Route::post('therapists/{therapist}/resolve-location-flag', [AdminTherapistController::class, 'resolveLocationFlag']);
 
             // Therapist Invites
@@ -1333,6 +1337,7 @@ Route::prefix('v1')->group(function () {
             // Web Analytics & IP Blocks
             Route::get('analytics/overview', [\App\Http\Controllers\API\V1\Admin\AnalyticsController::class, 'overview']);
             Route::get('analytics/sessions', [\App\Http\Controllers\API\V1\Admin\AnalyticsController::class, 'sessions']);
+            Route::get('analytics/ai-cost', [\App\Http\Controllers\API\V1\Admin\AdminAICostController::class, 'costSummary']);
             Route::get('analytics/ip-blocks', [\App\Http\Controllers\API\V1\Admin\AnalyticsController::class, 'listBlocks']);
             Route::post('analytics/ip-blocks', [\App\Http\Controllers\API\V1\Admin\AnalyticsController::class, 'addBlock']);
             Route::patch('analytics/ip-blocks/{block}/deactivate', [\App\Http\Controllers\API\V1\Admin\AnalyticsController::class, 'removeBlock']);
@@ -1628,7 +1633,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Sales routes
-        Route::prefix('sales')->middleware(['role:sales|vp_sales|ceo|coo|cgo|president|admin'])->group(function () {
+        Route::prefix('sales')->middleware(['role:sales|vp_sales|ceo|coo|cgo|president|admin|finder|builder|closer'])->group(function () {
             Route::get('dashboard', [SalesDashboardController::class, 'index']);
             Route::get('stats', [SalesDashboardController::class, 'stats']);
             Route::get('notifications', [SalesNotificationController::class, 'index']);
@@ -1653,6 +1658,9 @@ Route::prefix('v1')->group(function () {
             // Agent's own territories
             Route::get('my-territories', [\App\Http\Controllers\API\V1\Sales\TerritoryController::class, 'myTerritories']);
             Route::get('territories', [\App\Http\Controllers\API\V1\Sales\TerritoryController::class, 'index']);
+
+            // Builder dashboard data
+            Route::get('builder/organizations', [\App\Http\Controllers\API\V1\Sales\BuilderDashboardController::class, 'organizations']);
         });
 
         // Closer (Senior AE) routes
@@ -1661,6 +1669,15 @@ Route::prefix('v1')->group(function () {
             Route::get('ready-to-close', [\App\Http\Controllers\API\V1\Sales\CloserDashboardController::class, 'readyToClose']);
             Route::post('deals/{id}/mark-won', [\App\Http\Controllers\API\V1\Sales\CloserDashboardController::class, 'markWon']);
             Route::post('deals/{id}/mark-lost', [\App\Http\Controllers\API\V1\Sales\CloserDashboardController::class, 'markLost']);
+        });
+
+        // Finder compatibility routes (maps to Sales module)
+        Route::prefix('finder')->middleware(['auth:sanctum', 'role:finder|sales|admin'])->group(function () {
+            Route::apiResource('leads', SalesLeadController::class);
+            Route::get('stats', [SalesDashboardController::class, 'stats']);
+            Route::get('analytics', [SalesDashboardController::class, 'leadSources']);
+            Route::post('mail/send', [\App\Http\Controllers\API\V1\Sales\OutreachController::class, 'sendEmail']);
+            Route::get('notifications', [SalesNotificationController::class, 'index']);
         });
 
         // Admin territory management (admin + sales managers)
@@ -1784,7 +1801,7 @@ Route::prefix('v1')->group(function () {
         Route::post('payments/initiate', [PaymentControllerV1::class, 'initiatePayment'])->name('payment.initiate');
         Route::post('payments/initialize', [PaymentControllerV1::class, 'initiatePayment'])->name('payment.initialize');
         Route::post('payments/{payment}/verify', [PaymentControllerV1::class, 'verifyPayment'])->name('payment.verify');
-        Route::post('payments/verify', [PaymentControllerV1::class, 'verifyByReference'])->name('payment.verify.by_reference');
+        Route::post('payments/verify', [PaymentControllerV1::class, 'verifyByReferencePost'])->name('payment.verify.by_reference');
         Route::get('payments', [PaymentControllerV1::class, 'getPaymentHistory'])->name('payment.history');
         Route::get('payments/{payment}', [PaymentControllerV1::class, 'getPayment'])->name('payment.show');
         Route::post('payments/{payment}/refund', [PaymentControllerV1::class, 'refundPayment'])->name('payment.refund');
@@ -1948,29 +1965,29 @@ Route::prefix('v1')->group(function () {
             // Paginated, filterable audit event log
             // Query params: search, category, severity, from (date), to (date), page, per_page
             Route::get('log', function (\Illuminate\Http\Request $request) {
-                $perPage = min((int) $request->get('per_page', 25), 100);
-                $page    = max((int) $request->get('page', 1), 1);
-                $tableExists = \Schema::hasTable('audit_logs');
+                $perPage = min((int) $request->input('per_page', 25), 100);
+                $page    = max((int) $request->input('page', 1), 1);
+                $tableExists = Schema::hasTable('audit_logs');
 
                 if (! $tableExists) {
                     // Fallback: serve admin_logs as the audit event source
-                    $query = \DB::table('admin_logs')
+                    $query = DB::table('admin_logs')
                         ->leftJoin('users', 'admin_logs.user_id', '=', 'users.id')
                         ->select(
                             'admin_logs.id',
                             'admin_logs.created_at as timestamp',
                             'admin_logs.user_id',
-                            \DB::raw("CONCAT(COALESCE(users.first_name,''), ' ', COALESCE(users.last_name,'')) as user_name"),
+                            DB::raw("CONCAT(COALESCE(users.first_name,''), ' ', COALESCE(users.last_name,'')) as user_name"),
                             'users.email as user_email',
                             'admin_logs.action',
                             'admin_logs.target_type as resource',
                             'admin_logs.target_id as resource_id',
                             'admin_logs.ip_address',
                             'admin_logs.user_agent',
-                            \DB::raw("'low' as severity"),
-                            \DB::raw("'admin' as category"),
-                            \DB::raw("'success' as status"),
-                            \DB::raw("NULL as details")
+                            DB::raw("'low' as severity"),
+                            DB::raw("'admin' as category"),
+                            DB::raw("'success' as status"),
+                            DB::raw("NULL as details")
                         );
 
                     if ($request->filled('search')) {
@@ -1989,13 +2006,13 @@ Route::prefix('v1')->group(function () {
                     return response()->json(['success' => true, 'message' => 'Audit log retrieved.', 'data' => $result->items(), 'meta' => ['current_page' => $result->currentPage(), 'last_page' => $result->lastPage(), 'per_page' => $result->perPage(), 'total' => $result->total(), 'from' => $result->firstItem(), 'to' => $result->lastItem()]]);
                 }
 
-                $query = \DB::table('audit_logs')
+                $query = DB::table('audit_logs')
                     ->leftJoin('users', 'audit_logs.user_id', '=', 'users.id')
                     ->select(
                         'audit_logs.id',
                         'audit_logs.created_at as timestamp',
                         'audit_logs.user_id',
-                        \DB::raw("CONCAT(COALESCE(users.first_name,''), ' ', COALESCE(users.last_name,'')) as user_name"),
+                        DB::raw("CONCAT(COALESCE(users.first_name,''), ' ', COALESCE(users.last_name,'')) as user_name"),
                         'users.email as user_email',
                         'audit_logs.action',
                         'audit_logs.resource',

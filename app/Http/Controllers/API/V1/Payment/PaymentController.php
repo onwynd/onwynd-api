@@ -17,6 +17,7 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
@@ -45,9 +46,10 @@ class PaymentController extends Controller
     {
         $request->validate([
             'session_uuid' => 'required|string',
-            'currency' => 'nullable|string|in:NGN,USD',
-            'success_url' => 'nullable|url',
-            'cancel_url' => 'nullable|url',
+            'currency'     => 'nullable|string|in:NGN,USD,GBP,EUR,GHS,KES,ZAR,AUD,CAD',
+            'gateway'      => 'nullable|string|in:paystack,flutterwave,klump,stripe,dodopayments',
+            'success_url'  => 'nullable|url',
+            'cancel_url'   => 'nullable|url',
         ]);
 
         try {
@@ -103,12 +105,20 @@ class PaymentController extends Controller
             $vatAmount = round(($therapistRate + $platformFee) * ($vatRate / 100), 2);
             $totalAmount = $therapistRate + $platformFee + $vatAmount;
 
+            // If the customer explicitly chose a gateway, validate it is still enabled
+            // for their currency before we honour the preference.
+            $requestedGateway = $request->input('gateway');
+            if ($requestedGateway && ! \App\Helpers\GatewaySettings::enabled($requestedGateway)) {
+                $requestedGateway = null; // Silently fall back to automatic selection
+            }
+
             $payment = Payment::create([
-                'user_id' => $user->id,
-                'amount' => $totalAmount,
-                'session_rate' => $therapistRate,
-                'currency' => $currency,
-                'payment_type' => 'session_booking',
+                'user_id'         => $user->id,
+                'amount'          => $totalAmount,
+                'session_rate'    => $therapistRate,
+                'currency'        => $currency,
+                'payment_gateway' => $requestedGateway, // null = auto-select in PaymentProcessor
+                'payment_type'    => 'session_booking',
                 'description' => 'Session booking'.($platformFee > 0 ? " (incl. \u{20A6}{$platformFee} platform fee)" : '').($vatAmount > 0 ? " + \u{20A6}{$vatAmount} VAT" : ''),
                 'metadata' => [
                     'session_uuid' => $session->uuid,
@@ -202,7 +212,7 @@ class PaymentController extends Controller
             }
 
             // Confirm the user has already joined (payment_status=pending participant record)
-            $participant = \DB::table('group_session_participants')
+            $participant = DB::table('group_session_participants')
                 ->where('group_session_id', $session->id)
                 ->where('user_id', $user->id)
                 ->first();
@@ -607,6 +617,19 @@ class PaymentController extends Controller
     }
 
     /**
+     * Verify payment from POST body reference.
+     * POST /api/v1/payments/verify { reference: "..." }
+     */
+    public function verifyByReferencePost(Request $request): JsonResponse
+    {
+        $request->validate([
+            'reference' => 'required|string',
+        ]);
+
+        return $this->verifyByReference((string) $request->input('reference'));
+    }
+
+    /**
      * Initiate a payment (generic)
      * POST /api/v1/payments/initiate
      */
@@ -761,7 +784,7 @@ class PaymentController extends Controller
     public function verifyCallback(Request $request): JsonResponse
     {
         try {
-            $reference = $request->get('reference');
+            $reference = $request->input('reference');
             if (! $reference) {
                 return response()->json(['success' => false, 'message' => 'Payment reference is required'], 400);
             }
